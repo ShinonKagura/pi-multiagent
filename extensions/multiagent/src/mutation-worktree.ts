@@ -200,7 +200,13 @@ function assertCleanWorkingTree(repoRoot: string): void {
 		throw new WorktreeError("worktree-status-failed", `git status failed in ${repoRoot}: ${errorMessage(error)}`);
 	}
 	if (status.trim().length > 0) {
-		throw new WorktreeError("worktree-tree-dirty", `Worktree isolation requires a clean working tree at ${repoRoot}; commit, stash, or discard changes first.`);
+		// FIX-7: surface the dirty entries in the error so operators can diagnose what made
+		// the working tree dirty (often a .gitignore gap surfaced by a Pi child writing
+		// session/log state to the invocation cwd). Truncate to keep the diagnostic bounded.
+		const lines = status.split("\n").filter((l) => l.length > 0);
+		const preview = lines.slice(0, 10).map((l) => `    ${l}`).join("\n");
+		const more = lines.length > 10 ? `\n    ...and ${lines.length - 10} more lines` : "";
+		throw new WorktreeError("worktree-tree-dirty", `Worktree isolation requires a clean working tree at ${repoRoot}; commit, stash, or discard changes first. Dirty entries (git status --porcelain):\n${preview}${more}`);
 	}
 }
 
