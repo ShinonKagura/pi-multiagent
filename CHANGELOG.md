@@ -2,6 +2,7 @@
 
 ## 0.10.0 - 2026-05-26
 
+- **FIX-5 (HIGH, found in real-Pi smoke)** — `formatDetailsForModel` had no branches for `list`, `reattach`, scheduled-start, or schedule-cancel actions; it fell through to `formatError` and returned `agent-team-error - agent_team failed` to the model for every B1b/NEU-C call. Fixed with `formatListAction`, `formatReattachAction`, scheduled-start branch in `formatStart`, and new `formatCancel` that routes `scheduleCancel`. `shouldRenderGenericError` updated to NOT generic-error the new structured paths. Verified via bun smoke (5/5 PASS).
 - Added NEU-A B1b: `list` and `reattach` tool actions on top of B1a persistence. `list` returns one summary per visible run with owner classification (`this-session` / `foreign-session` / `orphan` / `unknown`), persisted artifact path, and pending worktree count. `reattach` returns a read-only snapshot of an orphaned or terminal run (manifest, status, worktrees, mirrored artifacts); mutation actions on reattached runs are denied unless the original owner session id matches.
 - Added G1 artifact mirroring: per-step final `.md` and worktree `.patch` artifacts are now copied into the persistent run dir's `artifacts/` subdir at create-time so reattach can find them after the original tmp `RunArtifactStore` is cleaned up.
 - Added G3 periodic retention sweep: a `setInterval`+`unref` timer runs the same sweep callback every 6 hours so long-running parent sessions do not let terminal runs accumulate past their retention.
