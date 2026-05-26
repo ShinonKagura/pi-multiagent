@@ -4,6 +4,7 @@ import type { AgentToolResult, AgentToolUpdateCallback } from "@earendil-works/p
 import type { SpawnProcess } from "./child-launch.ts";
 import { formatDetailsForModelContent } from "./result-format.ts";
 import { catalogParentExtensionTools } from "./tool-policy.ts";
+import type { ScheduledRunRegistry } from "./scheduled-runs.ts";
 import type { AgentDiagnostic, AgentInvocationDefaults, AgentTeamDetails, LibraryOptions, ParentSkillInventory, ParentToolInventory } from "./types.ts";
 import type { SubagentSkillConfig } from "./subagent-skills-config.ts";
 
@@ -27,12 +28,20 @@ export interface AgentTeamRuntimeOptions {
 	spawnProcess?: SpawnProcess;
 	/** Internal test hook: shorten command-ack timeout for deterministic message-idempotency regressions. */
 	rpcCommandAckTimeoutMs?: number;
+	/**
+	 * G4: lifecycle event emitter. Wired from `index.ts` to `pi.events.emit`. Called from
+	 * `DetachedRun` to notify cross-extension consumers of run/step lifecycle transitions.
+	 * No-op if absent; events are best-effort and never block the run.
+	 */
+	emitLifecycleEvent?: (eventName: string, payload: Record<string, unknown>) => void;
+	/** NEU-C: shared in-process schedule registry for `start`/`list`/`cancel` routing. */
+	scheduledRunRegistry?: ScheduledRunRegistry;
 }
 
 export function makeDetails(action: AgentTeamDetails["action"], ok: boolean, diagnostics: AgentDiagnostic[], options: AgentTeamRuntimeOptions, data: Partial<AgentTeamDetails> = {}, error?: { code: string; message: string }): AgentTeamDetails {
 	const firstError = diagnostics.find((item) => item.severity === "error");
 	const materializedError = error ?? (firstError ? { code: firstError.code, message: firstError.message } : undefined);
-	return { kind: "agent_team", action, ok: ok && firstError === undefined && materializedError === undefined, diagnostics: diagnostics.map((item) => ({ ...item, fields: item.fields ? [...item.fields] : undefined })), error: materializedError, library: data.library, catalog: data.catalog ?? [], extensionTools: catalogParentExtensionTools(options.parentTools), run: data.run, cursor: data.cursor, events: data.events ?? [], steps: data.steps ?? [], outputs: data.outputs ?? [], wait: data.wait, message: data.message, cleanup: data.cleanup, notice: data.notice };
+	return { kind: "agent_team", action, ok: ok && firstError === undefined && materializedError === undefined, diagnostics: diagnostics.map((item) => ({ ...item, fields: item.fields ? [...item.fields] : undefined })), error: materializedError, library: data.library, catalog: data.catalog ?? [], extensionTools: catalogParentExtensionTools(options.parentTools, options.cwd), run: data.run, cursor: data.cursor, events: data.events ?? [], steps: data.steps ?? [], outputs: data.outputs ?? [], wait: data.wait, message: data.message, cleanup: data.cleanup, notice: data.notice, listedRuns: data.listedRuns, reattach: data.reattach, scheduledRuns: data.scheduledRuns, scheduleRegistration: data.scheduleRegistration, scheduleCancel: data.scheduleCancel };
 }
 
 export function finalizeDetails(details: AgentTeamDetails): AgentToolResult<AgentTeamDetails> {

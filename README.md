@@ -2,7 +2,7 @@
 
 `pi-multiagent` installs one Pi extension tool, `agent_team`, plus the `/skill:pi-multiagent` agent guide and schema-checked graph examples.
 
-Use `agent_team` when independent helper context materially improves a task: local reconnaissance, current web research, critique, validation proof, implementation review, or fan-in synthesis. The parent assistant remains the lead. Child output is evidence, not instructions. Child processes do not inherit the parent transcript, session, context files, prompt templates, themes, project `SYSTEM.md`, or ambient skill discovery. Subagent skill propagation is product-configured all-or-nothing: `--agent-team-subagent-skills enabled|disabled`, default `enabled`, passes all caller-visible Pi skills when enabled, and passes none when disabled. A child inherits the parent Pi model and thinking defaults at `start` launch time unless its agent metadata pins a model or thinking level; switching the parent model later does not hot-swap live children. Child model/provider availability follows normal Pi extension discovery for the child cwd and agent dir; explicit `extensionTools` grants are only for callable extension tools.
+Use `agent_team` when independent helper context materially improves a task: local reconnaissance, current web research, critique, validation proof, implementation review, or fan-in synthesis. The parent assistant remains the lead. Child output is evidence, not instructions. Child processes do not inherit the parent transcript, session, context files, prompt templates, themes, project `SYSTEM.md`, or ambient skill discovery. Subagent skill propagation is product-configured: `--agent-team-subagent-skills auto|enabled|disabled`, default `auto`, passes all caller-visible Pi skills only when safe and under the cap, warns and passes none when auto fallback is needed, hard-fails in explicit `enabled` mode, and passes none in `disabled` mode. A child inherits the parent Pi model and thinking defaults at `start` launch time unless its agent metadata pins a model or thinking level; switching the parent model later does not hot-swap live children. Child model/provider availability follows normal Pi extension discovery for the child cwd and agent dir; explicit `extensionTools` grants are only for callable extension tools.
 
 This README is the **human/operator path** for install, trust, lifecycle, limits, first run, and source validation. The complete model-facing invocation contract lives in [`/skill:pi-multiagent`](skills/pi-multiagent/SKILL.md); graph choreography lives in the [graph cookbook](skills/pi-multiagent/references/graph-cookbook.md).
 
@@ -32,7 +32,7 @@ After installing in a running Pi session, use `/reload`. Reload requests cancell
 - Bundled package agents such as `package:scout`, `package:web-researcher`, `package:planner`, `package:critic`, `package:docs-auditor`, `package:reviewer`, `package:validator`, `package:worker`, and `package:synthesizer`.
 - Pure graph JSON examples under [`examples/graphs`](examples/graphs).
 
-`catalog` output is authoritative for source-qualified refs, descriptions, routing tags, default built-in tool profiles, source paths, SHA metadata, and active extension-tool provenance. Catalog query routing scores role names/ref names (the name portion of source-qualified refs), descriptions, tags, default tools, model, and thinking only; source and file path stay provenance, not ranking signals. Do not duplicate a role table from memory; inspect `catalog` when role choice, user/project refs, default tools, or extension provenance matter.
+`catalog` output is authoritative for source-qualified refs, descriptions, routing tags, default built-in tool profiles, source paths, SHA metadata, and active extension-tool provenance. Do not duplicate a role table from memory; inspect `catalog` when role choice, user/project refs, default tools, or extension provenance matter.
 
 ## Action rule of thumb
 
@@ -100,7 +100,7 @@ Cleanup is evidence deletion, not routine hygiene. Preserve the short `runId`, s
 
 `start` returns a usable short registered `runId` such as `r1` or leaves no child process alive. The handle is not a secret or high-entropy bearer token; it is a convenience handle inside the current Pi session and extension process. Follow-up actions from another Pi session in the same process treat the handle as not found. Parent abort before registration cancels setup; parent abort after `runId` does not kill the detached run. In the interactive TUI, Escape cancels or aborts the parent surface; after `start` has returned a `runId`, use explicit `agent_team cancel` to stop the detached work. Live and retained run registries are process-local; on Pi session shutdown or reload the extension requests cancellation of live registered runs owned by that session, but `agent_team` is not crash-resumable and in-memory `runId`s should not be treated as recoverable after reload.
 
-In short, pushed notices are compact human receipts and omit the full child transcript. Terminal notices include terminal step artifact paths and retention expiry when available; milestone notices stay compact. Interactive Pi live progress is rendered by the `agent_team:live` widget and notice messages; `agent_team` does not publish transient run/lane counts into Pi's shared footer status row. Pushed notices are delivered only while the Pi session that started the short `runId` is still the active delivery target; if you switch sessions, use `run_status` after returning to the starting session. Use `run_status` for sink artifact indexes, all terminal step artifact metadata, diagnostics, bounded task previews, cwd/upstream references, and stop/status hints; use `step_result` for one non-sink or sink step. Full assistant finals are retained in tmp artifact files until retention expiry or cleanup. Failed, canceled, or timed-out steps that have no successful final may retain bounded `Non-final assistant evidence` in their terminal artifact so partial text is visible without being treated as a completed child answer; final artifacts also include launch metadata such as effective tools, extension tools, model/thinking lane, cwd, and upstream artifact references. If a child Pi reports context overflow and then Pi compacts/continues to a later valid assistant final, `agent_team` treats the overflow as a recovery boundary; stale pre-overflow text is not accepted as success. If no valid post-recovery final arrives before closeout or timeout, the step fails with an unrecovered-overflow diagnostic and `needs` dependents stay blocked.
+In short, pushed notices are compact human receipts and omit the full child transcript. Terminal notices include terminal step artifact paths and retention expiry when available; milestone notices stay compact. Pushed notices are delivered only while the Pi session that started the short `runId` is still the active delivery target; if you switch sessions, use `run_status` after returning to the starting session. Use `run_status` for sink artifact indexes, all terminal step artifact metadata, diagnostics, bounded task previews, cwd/upstream references, and stop/status hints; use `step_result` for one non-sink or sink step. Full assistant finals are retained in tmp artifact files until retention expiry or cleanup. Failed, canceled, or timed-out steps that have no successful final may retain bounded `Non-final assistant evidence` in their terminal artifact so partial text is visible without being treated as a completed child answer; final artifacts also include launch metadata such as effective tools, extension tools, model/thinking lane, and mutation scope. If a child Pi reports context overflow and then Pi compacts/continues to a later valid assistant final, `agent_team` treats the overflow as a recovery boundary; stale pre-overflow text is not accepted as success. If no valid post-recovery final arrives before closeout or timeout, the step fails with an unrecovered-overflow diagnostic and `needs` dependents stay blocked.
 
 Retained detached runs keep terminal metadata and artifact paths only inside the current extension process. Cleanup frees only terminal retained runs and deletes package-owned retained evidence. Preserve artifacts before cleanup when they may support handoff, compaction recovery, chained graphs, or release proof.
 
@@ -112,7 +112,7 @@ Every child process keeps at least the filesystem read/discovery suite (`read`, 
 
 Child Pi launches use normal Pi extension discovery so extension-provided model providers are available. Ambient trusted extensions may run startup code, provider hooks, tool hooks, and resource discovery as normal Pi behavior. `--tools` remains the callable tool-name allowlist; it is not an extension-code sandbox and extension tools can shadow tool names under normal Pi semantics. Graph authority does not disable or gate this normal Pi extension discovery. Child RPC is unattended: fire-and-forget extension UI updates such as status, notifications, widgets, titles, and editor text are recorded as suppressed non-error activity, while blocking or unknown UI requests fail closed. Child `tool_execution_end` records with `isError:true` are preserved as error-status tool activity in debug events and compact `lastActivity`; they do not automatically fail a step that later recovers and produces a valid final.
 
-Subagent skills are not graph-controlled: `steps[].agent.skills` is rejected. The product flag `--agent-team-subagent-skills enabled|disabled` defaults to `enabled`; enabled children receive every caller-visible Pi skill, and their prompt reminds them to use relevant available skills. Skills never grant tools, graph authority, mutation permission, or broader task scope. Enabled mode is all-or-nothing: unreadable visible skill sources or an inactive parent `read` tool fail planning; use `--agent-team-subagent-skills disabled` to pass no caller skills.
+Subagent skills are not graph-controlled: `steps[].agent.skills` is rejected. The product flag `--agent-team-subagent-skills auto|enabled|disabled` defaults to `auto`; auto children receive every caller-visible Pi skill only when it is safe under the same project-code policy and under the package cap. If auto mode sees too many skills, unreadable visible skill sources, inactive parent `read`, or project/temporary/workspace-local skill files without `graph.authority.allowProjectCode:true`, it warns and passes no caller skills instead of blocking the graph. Skills never grant tools, graph authority, mutation permission, or broader task scope. Use `--agent-team-subagent-skills enabled` for strict all-or-nothing hard failures, or `--agent-team-subagent-skills disabled` to pass no caller skills.
 
 Authority is graph-wide:
 
@@ -122,66 +122,67 @@ Authority is graph-wide:
 | `allowShellTools` | `bash`; bash can mutate through commands. |
 | `allowMutationTools` | Structured `edit` and `write`. |
 | `allowExtensionCode` | Explicit callable extension-tool grants copied from `catalog` as `extensionTools`; not a global switch for normal Pi extension discovery. |
+| `allowProjectCode` | `project:` agents, project library sources, project/local explicit `extensionTools` grants, and project/temporary caller skill sources; it does not disable normal Pi extension discovery. |
+| `allowMutationWorktree` | Per-step git worktree isolation requests via `steps[].isolation:"worktree"`. OS-level: the child runs inside a separate git working copy branched from HEAD; per-step diff stat and full patch are captured as terminal artifact evidence; the worktree and its temp branch are removed after the step terminalizes. Requires a clean git repo at the nearest git root of the invocation cwd. Mutation-capable only: rejected at planning time for read-only steps. Not a sandbox for arbitrary bash (network, `cd` outside, etc.). Not crash-resumable: a Pi crash mid-step can leak a worktree until extension startup prunes it. |
 
-`allowShellTools` grants trusted shell execution to child steps whose effective built-in tools include `bash`. Shell commands run with the child process authority, so use shell lanes only for parent-approved command proof or probes, keep the task text exact, and prefer serialized validator lanes for important command evidence. `package:validator` fails planning unless effective tools include `bash`; use `package:reviewer` for non-command review. `allowMutationTools` grants trusted mutation execution through `edit` and `write`; use it only for currently authorized implementation work, with the owned files, exclusions, and validation commands stated in the worker task. `package:worker` fails planning unless effective tools include `edit` or `write`; use `package:planner` or `package:reviewer` for non-mutating work.
+Write-capable steps and bash-capable `package:worker` steps need concrete first-class `mutationScope`. `mutationScope` is a planning/prompt handoff, not path confinement; bash/edit/write are not path-confined.
 
-A step `cwd` narrows launch working context to an existing directory inside the invocation cwd. Symlinked, missing, non-directory, and path-escaping cwd values are denied, and cwd identity is rechecked immediately before launch. Bash-enabled steps are refused when the effective `cwd` tree contains `.pi/settings.json`.
+## Worktree isolation
 
-## First successful `graphFile` run
+Opt-in OS-level isolation for mutation-capable steps. Two axes both required:
 
-`graphFile` points to a pure relative graph JSON file inside cwd, not an action wrapper. Use it when a trusted workspace graph file already exists, or when you are authorized to create one. For a first success, create `local-read-only-graph.json` in the current workspace with only the graph body:
+- Graph authority: `graph.authority.allowMutationWorktree:true`.
+- Per-step request: `steps[].isolation:"worktree"`.
 
-```json
-{
-  "objective": "Answer one scoped local question.",
-  "authority": {
-    "allowFilesystemRead": true
-  },
-  "steps": [
-    {
-      "id": "inspect",
-      "agent": {
-        "ref": "package:scout"
-      },
-      "task": "Inspect relevant local files. Do not edit or run commands. Return paths, facts, risks, and unknowns."
-    }
-  ]
-}
-```
+When both are set, before launching the step `agent_team`:
 
-Inspect authority, tools, extension grants, prompts, tasks, and `cwd` values before launch. Then start the copied workspace file:
+1. Walks up from the invocation cwd to find the nearest git repo root.
+2. Asserts a clean working tree (no staged or unstaged changes; fails closed if dirty).
+3. Resolves HEAD as the base commit.
+4. Creates a per-step worktree at `${TMPDIR}/pi-multiagent-wt-<random>/` on branch `pi-multiagent/<runId>/<stepId>`.
+5. Spawns the child with `cwd` set to the worktree path.
+
+When the step terminalizes (success, failure, cancel, timeout) `agent_team`:
+
+1. Captures `git diff --stat <base>..HEAD` as `step.worktreeDiffStat`.
+2. Captures the full patch and writes it as a step artifact (`<stepId>-worktree.patch`); the path appears as `step.worktreePatchPath` and is included in `run_status` and `step_result` terminal-artifact rows.
+3. Removes the worktree (`git worktree remove --force`) and deletes the temp branch (`git branch -D`). Best-effort: failures land as `worktree-cleanup-warning` diagnostics, not as a status change.
+
+Strict guarantee: if worktree creation fails for any reason (not a git repo, dirty tree, branch collision, `git worktree add` failure) the step fails with the relevant `worktree-*` code; there is no silent fallback to the invocation cwd.
+
+Rejections at planning time:
+
+| Diagnostic code | Cause |
+| --- | --- |
+| `worktree-authority-required` | `steps[].isolation:"worktree"` without `graph.authority.allowMutationWorktree:true`. |
+| `worktree-non-mutation-denied` | `steps[].isolation:"worktree"` on a read-only step. Only steps that use `edit`/`write`, or `package:worker` steps that use `bash`, may request it. |
+| `isolation-value-invalid` | `steps[].isolation` set to something other than `"worktree"`. |
+
+Rejections at launch time:
+
+| Diagnostic code | Cause |
+| --- | --- |
+| `worktree-not-git-repo` | No git repository found at or above the invocation cwd. |
+| `worktree-tree-dirty` | Working tree at the git root has staged or unstaged changes. |
+| `worktree-branch-exists` | The deterministic per-step branch already exists; rerun with a fresh `runId` or remove the stale branch. |
+| `worktree-add-failed` | `git worktree add` failed (e.g. corrupted refs, disk full). The accompanying message includes `git`'s stderr. |
+
+Worktree isolation does not include `node_modules` from the invocation cwd; if the step's task requires it, install or symlink first. Worktree leaks across Pi reload/crash are a known limit until NEU-A (crash-resumable detached runs) lands; until then, run `git worktree prune` manually after a hard crash, or call the bundled prune helper at extension startup.
+
+A step `cwd` narrows launch working context to an existing directory inside the invocation cwd. It is not path confinement, and `agent_team` does not add a read sandbox. Put file limits in `task`, `system`, `cwd`, and `mutationScope`; treat those as instruction/launch-context controls, not OS confinement. Bash-enabled steps are refused when the effective `cwd` tree contains `.pi/settings.json`.
+
+## `graphFile`
+
+`graphFile` points to a pure relative graph JSON file inside cwd, not an action wrapper:
 
 ```json
 {
   "action": "start",
-  "graphFile": "local-read-only-graph.json"
+  "graphFile": "read-only-audit-fanout.json"
 }
 ```
 
-Need headless supervision or artifact paths:
-
-```json
-{
-  "action": "run_status",
-  "runId": "r1",
-  "waitSeconds": 30
-}
-```
-
-Need the step text:
-
-```json
-{
-  "action": "step_result",
-  "runId": "r1",
-  "stepId": "inspect",
-  "preview": true
-}
-```
-
-Cleanup is evidence deletion. Preserve the short `runId`, status, terminal artifact paths, and any needed full text before cleanup.
-
-Packaged examples are references to copy and adapt; they are not loaded by package path and are not a runtime template API. Do not point `graphFile` at installed package/example paths. Do not put `action`, `runId`, nested `graphFile`, or other control fields inside the graph file.
+Packaged examples are references to copy and adapt; they are not loaded by package path and are not a runtime template API. Copy a trusted example into the workspace, replace placeholders, inspect authority, then call `start` with the copied filename.
 
 ## Messages and supervision
 
@@ -189,9 +190,8 @@ After `start`:
 
 - Running notice and no evidence needed: keep working.
 - Need compact state, artifact paths, diagnostics, effective tools, child tool-error breadcrumbs, or the launch-time child model lane: `run_status`.
-- Need to wait without pushed notices, including JSON/API/headless supervision: `run_status` with `waitSeconds`; it wakes on material events, not routine assistant/tool/UI activity, and returns a receipt such as `material`, `timeout`, `already-material`, or `terminal`.
-- Need incremental wait/debug reads: pass the returned `Cursor` value back as `run_status.cursor`; it is a process-local event cursor, not a run handle or artifact path.
-- Need one step's live/final text or non-sink artifact: `step_result` with `preview:true` only when text belongs in context. `run_status.stepId` filters waits/debug events only; use `step_result` for step text.
+- Need to wait without polling: `run_status` with `waitSeconds`; it wakes on material events, not routine assistant/tool/UI activity, and returns a receipt such as `material`, `timeout`, `already-material`, or `terminal`.
+- Need one step's live/final text or non-sink artifact: `step_result` with `preview:true` only when text belongs in context.
 - Need scope repair: `message` one live step.
 - Work is unsafe, obsolete, stuck, or explicitly stopped: `cancel`.
 - Run is terminal and evidence is preserved or discarded: `cleanup`.
@@ -200,13 +200,13 @@ After `start`:
 
 ## Graph examples
 
-Copy/adapt warning: packaged examples are skeletons for positive graph shapes. Do not run them verbatim; replace objective, paths/components, trusted command list or file set in the task text, stop condition, expected output fields, and human decision question before starting the graph.
+Copy/adapt warning: packaged examples that say "scoped question" are skeletons. Do not run them verbatim; replace objective, paths/components, command scopes, stop condition, expected output fields, and any `mutationScope` before starting the graph.
 
-The packaged set covers single-specialist, inline fan-in, cwd-launched fanout, read-only fanout, map-reduce, tree-reduce, sharded map-reduce, artifact-chained follow-up, product-experience source audit, evidence-trace audit, human-gated planning, command validation, validation matrix, completed proof review, model-facing docs audit, release readiness, and research-to-change planning. Browse [`examples/graphs`](examples/graphs) and the [graph cookbook](skills/pi-multiagent/references/graph-cookbook.md).
+The packaged set covers single-specialist, inline fan-in, cwd-scoped fanout, read-only fanout, map-reduce, sharded map-reduce, artifact-chained follow-up, human-gated planning, approved implementation, implementation with independent validator, command validation, validation matrix, completed proof review, docs/example alignment, implementation review, model-facing docs audit, release readiness, and release-fix foundry. Browse [`examples/graphs`](examples/graphs) and the [graph cookbook](skills/pi-multiagent/references/graph-cookbook.md).
 
-Use `release-readiness-review.json` for the default non-mutating read/shell release proof path. `package:web-researcher` fails planning before child launch unless the step grants explicit callable `exa_search` and `exa_fetch` `extensionTools` copied from live `catalog` provenance with `allowExtensionCode:true`; cookbook web patterns stay copy/adapt because public examples cannot know local provenance.
+Use `release-readiness-review.json` for the default non-mutating read/shell release proof path. Use `public-release-foundry.json` only after exact current release-fix mutation authorization. `package:web-researcher` fails planning before child launch unless the step grants explicit callable `exa_search` and `exa_fetch` `extensionTools` copied from live `catalog` provenance with `allowExtensionCode:true`; cookbook web patterns stay copy/adapt because public examples cannot know local provenance.
 
-Before starting any graph with `bash`, verify the graph authority is limited to the intended shell grant and the step task states the exact trusted commands or command class. Before starting a mutation-capable graph, verify exact parent authorization, owned files or mutation class, exclusions, and validation commands in the worker task. Graph gates are model-level dependencies, not human approval checkpoints; use separate runs when a human decision must occur before mutation.
+Before starting a mutation-capable graph, verify: exact parent authorization, concrete `mutationScope`, graph authority limited to needed grants, and no placeholder or `REPLACE` text left in mutation scopes. Graph gates are model-level dependencies, not human approval checkpoints; use separate runs when a human decision must occur before mutation.
 
 ## Limits
 
@@ -239,11 +239,17 @@ Before starting any graph with `bash`, verify the graph authority is limited to 
 | Symptom | Check |
 | --- | --- |
 | `run` is rejected | Use `start`, then `run_status`; `run` is intentionally absent. |
-| Catalog has no expected role | Omit the query or use concise routing terms; check `library.sources` and package/user/project scope. |
+| `worktree-authority-required` | Add `graph.authority.allowMutationWorktree:true`; opt-in is graph-wide. |
+| `worktree-non-mutation-denied` | Remove `isolation:"worktree"` from read-only steps; only edit/write or `package:worker`+bash steps qualify. |
+| `worktree-tree-dirty` | Commit, stash, or discard changes at the nearest git root before starting the graph. |
+| `worktree-not-git-repo` | Worktree isolation requires a git repo at or above the invocation cwd; `git init` first or run without isolation. |
+| `worktree-add-failed` | Inspect the included `git` stderr; common causes are corrupted refs, disk full, or pre-existing target path. |
+| Leaked worktree after crash | Pi crash mid-step can leave a `${TMPDIR}/pi-multiagent-wt-*` worktree and `pi-multiagent/<runId>/<stepId>` branch; run `git worktree prune` and `git branch -D` until NEU-A ships crash-resumable cleanup. |
+| Catalog has no expected role | Omit the query or use concise routing terms; check `library.sources` and package/user/trusted-project scope. |
 | Bare ref is rejected | Use a source-qualified ref such as `package:reviewer`. |
-| Project agents do not load | For start, set `graph.library.sources:["project"]`; for catalog, use `library.sources:["project"]`. Project and user library sources load when requested and present. |
+| Project agents do not load | For start, set `graph.library.sources:["project"]` and `graph.authority.allowProjectCode:true`; for catalog, use trusted `library.sources:["project"]` plus `projectAgents:"allow"`. |
 | `graphFile` is rejected | Use a pure relative graph JSON file inside cwd; do not include `action`, `runId`, or nested `graphFile`. |
-| Built-in tool is rejected | Add `allowFilesystemRead:true`; add shell/mutation authority only when the delegated task really needs trusted shell or edit/write tools. `package:validator` requires effective `bash`; `package:worker` requires effective `edit` or `write`. |
+| Built-in tool is rejected | Add `allowFilesystemRead:true`; add shell/mutation authority only when intended. |
 | Extension tool is rejected | Keep callable extension grants in `extensionTools` and copy source/scope/origin from `catalog`. |
 | Which model did a child run? | Check `run_status` step rows; they report the launch-time model/thinking lane. Parent model changes after `start` do not affect live children. |
 | Provider model is unavailable in a child | Install or enable the provider extension through normal Pi extension discovery for the child cwd/agent dir; one-off parent `pi -e` provider extensions are not inherited. |
@@ -273,6 +279,20 @@ PI_MULTIAGENT_REAL_SMOKE=1 PI_MULTIAGENT_REAL_SMOKE_TIMEOUT_MS=180000 pnpm run s
 ```
 
 For major rewrites or live integration changes, static gates and toy smokes are not enough. Run a meaningful articulated graph, supervise it with pushed notices, compact `run_status`, bounded `run_status.waitSeconds`, targeted `step_result`, and `debugEvents:true` only for package debugging. Inspect or preserve terminal artifacts before cleanup. A stalled, canceled, or final-less serious graph is NEEDS-WORK, not GO.
+
+## Architectural non-goals
+
+These are intentionally not features of `pi-multiagent`. If you need them, keep a separate
+subagent extension installed; the pi-multiagent trust model deliberately excludes them.
+
+- **Child→parent live communication.** Children are unattended; fire-and-forget UI updates are suppressed; blocking/unknown UI requests fail closed. Parent→child supervision uses budgeted `message` only.
+- **Recursive `agent_team` calls.** Denied at three layers (`BUILTIN_CHILD_TOOL_NAMES` exclusion, `RESERVED_EXTENSION_TOOL_NAMES` reservation with `extension-tool-recursion-denied`, child `--tools` allowlist).
+- **Cross-host registry of detached runs.** Runs are per-host; persistent state dir is local.
+- **Child process resurrection / live reattach.** `reattach` is read-only by design; mutation actions on reattached runs are denied because the original owner is dead.
+- **Free-form chain DSL or conversational delegation.** Graphs are static DAGs; if you want `Agent({chain:[...]})` ergonomics, use `pi-subagents` separately.
+- **Schedule/cron triggers as first-class feature.** Deferred to NEU-C ADR; use an external scheduler that calls `agent_team start` instead.
+
+For `pi.events` cross-extension consumers, see the lifecycle event names listed in `skills/pi-multiagent/SKILL.md`.
 
 ## Reference
 

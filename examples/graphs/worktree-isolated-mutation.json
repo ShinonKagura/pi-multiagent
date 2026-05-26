@@ -1,0 +1,45 @@
+{
+  "objective": "Apply a focused mutation inside a per-step git worktree, capture diff/patch as terminal evidence, and review the change without touching the invocation working tree. Copy/adapt: replace task scope, mutationScope, and any explicit file paths before launching.",
+  "library": {
+    "sources": [
+      "package"
+    ]
+  },
+  "authority": {
+    "allowFilesystemRead": true,
+    "allowShellTools": true,
+    "allowMutationTools": true,
+    "allowMutationWorktree": true
+  },
+  "steps": [
+    {
+      "id": "scout",
+      "agent": {
+        "ref": "package:scout"
+      },
+      "task": "Inspect the repo and confirm the target file set the upcoming mutation will touch. Return file paths, current snippets, and any risks. Do not edit."
+    },
+    {
+      "id": "mutate",
+      "agent": {
+        "ref": "package:worker"
+      },
+      "task": "Apply the change described in scout's evidence inside this isolated worktree only. Do not run installers, generators, or commands that fetch the network. After editing, run a small validation (file exists/content matches) and commit a single descriptive commit on this worktree branch. Final answer must list edited files, diff stat, and confirmation that the validation passed.",
+      "mutationScope": "REPLACE: concrete file set the mutation is authorized to touch (e.g. 'edit allowed under src/foo/, no changes to src/foo/__legacy__/'). Placeholders are denied at planning time.",
+      "needs": [
+        "scout"
+      ],
+      "isolation": "worktree"
+    },
+    {
+      "id": "review",
+      "agent": {
+        "ref": "package:reviewer"
+      },
+      "task": "Read the mutate step's terminal artifact, including its ## Worktree isolation evidence section. Open the worktreePatchPath and inspect the captured diff. Decide PASS if the mutation matches scout's authorized scope and the validation passed, otherwise FAIL with concrete reasons. Do not edit.",
+      "after": [
+        "mutate"
+      ]
+    }
+  ]
+}

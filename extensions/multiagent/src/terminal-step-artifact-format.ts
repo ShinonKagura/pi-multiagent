@@ -35,7 +35,17 @@ function formatStepArtifact(step: StepSnapshot, output: StepOutput | undefined):
 	const cwd = step.cwd ? ` cwd=${JSON.stringify(boundedModelText(step.cwd, CWD_CHARS))}` : "";
 	const stopReason = step.stopReason ? ` stopReason=${JSON.stringify(boundedModelText(step.stopReason, CWD_CHARS))}` : "";
 	const task = step.taskPreview ? ` task=${JSON.stringify(boundedModelText(step.taskPreview, TASK_CHARS))}` : "";
-	return `- ${step.id} [${step.status}]: artifact=${artifact} chars=${chars}${cwd}${formatStepUpstreamArtifacts(step)}${stopReason}${task}`;
+	return `- ${step.id} [${step.status}]: artifact=${artifact} chars=${chars}${cwd}${formatStepUpstreamArtifacts(step)}${formatWorktreeEvidence(step)}${stopReason}${task}`;
+}
+
+function formatWorktreeEvidence(step: StepSnapshot): string {
+	if (!step.isolation && !step.worktreePatchPath && !step.worktreeBranch) return "";
+	const parts: string[] = [];
+	if (step.isolation) parts.push(`isolation=${step.isolation}`);
+	if (step.worktreeBranch) parts.push(`branch=${JSON.stringify(boundedModelText(step.worktreeBranch, CWD_CHARS))}`);
+	if (step.worktreePatchPath) parts.push(`patch=${JSON.stringify(boundedModelText(step.worktreePatchPath, PATH_CHARS))}`);
+	if (step.worktreeDiffStat) parts.push(`diffStat=${JSON.stringify(boundedModelText(step.worktreeDiffStat, CWD_CHARS))}`);
+	return ` ${parts.join(" ")}`;
 }
 
 function formatStepUpstreamArtifacts(step: StepSnapshot): string {

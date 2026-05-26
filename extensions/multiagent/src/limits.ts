@@ -1,7 +1,7 @@
 /** Detached graph limit normalization. */
 
 import type { GraphSpec } from "./schemas.ts";
-import type { StartOptions, TeamLimits } from "./types.ts";
+import type { ScheduleSpec, StartOptions, TeamLimits } from "./types.ts";
 import { DEFAULT_MAX_RUN_SECONDS, DEFAULT_NOTIFY_MAX_NOTICES, DEFAULT_NOTIFY_MIN_INTERVAL_SECONDS, DEFAULT_NOTIFY_MODE, DEFAULT_TERMINAL_RETENTION_SECONDS, DEFAULT_TIMEOUT_SECONDS_PER_STEP, MAX_CONCURRENCY, MAX_MAX_RUN_SECONDS, MAX_NOTIFY_MAX_NOTICES, MAX_NOTIFY_MIN_INTERVAL_SECONDS, MAX_TERMINAL_RETENTION_SECONDS, MAX_TIMEOUT_SECONDS_PER_STEP } from "./types.ts";
 
 export function normalizeLimits(graph: GraphSpec): TeamLimits {
@@ -11,7 +11,7 @@ export function normalizeLimits(graph: GraphSpec): TeamLimits {
 	};
 }
 
-export function normalizeStartOptions(input: { maxRunSeconds?: number; terminalRetentionSeconds?: number; notify?: { mode?: StartOptions["notify"]["mode"]; maxNotices?: number; minIntervalSeconds?: number } } | undefined): StartOptions {
+export function normalizeStartOptions(input: { maxRunSeconds?: number; terminalRetentionSeconds?: number; notify?: { mode?: StartOptions["notify"]["mode"]; maxNotices?: number; minIntervalSeconds?: number }; schedule?: ScheduleSpec } | undefined): StartOptions {
 	return {
 		maxRunSeconds: clampInteger(input?.maxRunSeconds ?? DEFAULT_MAX_RUN_SECONDS, 1, MAX_MAX_RUN_SECONDS),
 		terminalRetentionSeconds: clampInteger(input?.terminalRetentionSeconds ?? DEFAULT_TERMINAL_RETENTION_SECONDS, 1, MAX_TERMINAL_RETENTION_SECONDS),
@@ -20,6 +20,7 @@ export function normalizeStartOptions(input: { maxRunSeconds?: number; terminalR
 			maxNotices: clampInteger(input?.notify?.maxNotices ?? DEFAULT_NOTIFY_MAX_NOTICES, 0, MAX_NOTIFY_MAX_NOTICES),
 			minIntervalSeconds: clampInteger(input?.notify?.minIntervalSeconds ?? DEFAULT_NOTIFY_MIN_INTERVAL_SECONDS, 0, MAX_NOTIFY_MIN_INTERVAL_SECONDS),
 		},
+		schedule: input?.schedule,
 	};
 }
 

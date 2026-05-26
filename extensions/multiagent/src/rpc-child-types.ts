@@ -1,6 +1,6 @@
 /** Shared RPC child controller types. */
 
-import type { AgentInvocationDefaults, ResolvedAgent, StepStatus, TeamLimits } from "./types.ts";
+import type { AgentInvocationDefaults, ResolvedAgent, StepOutputLimitSpec, StepStatus, TeamLimits } from "./types.ts";
 
 export interface RpcChildControllerOptions {
 	agent: ResolvedAgent;
@@ -10,6 +10,8 @@ export interface RpcChildControllerOptions {
 	promptPath: string;
 	spawnProcess?: import("./child-launch.ts").SpawnProcess;
 	ackTimeoutMs?: number;
+	/** NEU-B: per-step output truncation knobs. Clamps to package-level caps. */
+	outputLimit?: StepOutputLimitSpec;
 	onEvent: (input: { type: "rpc" | "assistant_final" | "tool" | "diagnostic" | "parent_message" | "ui"; label?: string; preview?: string; status?: string }) => void;
 	onText?: (text: string) => void;
 }

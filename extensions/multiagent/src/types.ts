@@ -1,31 +1,37 @@
 /** Shared contracts for the detached-only Pi multiagent package. */
 
-export type AgentTeamAction = "catalog" | "start" | "run_status" | "step_result" | "message" | "cancel" | "cleanup" | "missing/invalid";
+export type AgentTeamAction = "catalog" | "start" | "run_status" | "step_result" | "message" | "cancel" | "cleanup" | "list" | "reattach" | "missing/invalid";
 export type ExecutionAction = Exclude<AgentTeamAction, "missing/invalid">;
 export type AgentSource = "package" | "user" | "project" | "inline";
 export type LibrarySource = "package" | "user" | "project";
+export type ProjectAgentsPolicy = "deny" | "confirm" | "allow";
 export type InvocationAgentKind = "inline" | "library";
 export type ThinkingLevel = "inherit" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 export type RunStatus = "running" | "succeeded" | "mixed" | "failed" | "canceling" | "canceled" | "expired";
 export type StepStatus = "pending" | "running" | "succeeded" | "failed" | "blocked" | "timed_out" | "canceled";
 export type MessageChannel = "steer" | "follow_up";
 export type NotifyMode = "none" | "final" | "milestones";
-export type SubagentSkillMode = "enabled" | "disabled";
+export type SubagentSkillMode = "enabled" | "disabled" | "auto";
+export type WorktreeIsolationMode = "worktree";
 export type EventType = "run" | "step" | "assistant_delta" | "assistant_final" | "tool" | "diagnostic" | "parent_message" | "rpc" | "ui";
 
 export const DEFAULT_LIBRARY_SOURCES: LibrarySource[] = ["package"];
 export const DEFAULT_GRAPH_LIBRARY_SOURCES: LibrarySource[] = ["package"];
+export const DEFAULT_PROJECT_AGENTS_POLICY: ProjectAgentsPolicy = "deny";
 export const LIBRARY_SOURCE_VALUES = ["package", "user", "project"] as const;
-export const AGENT_TEAM_ACTION_VALUES = ["catalog", "start", "run_status", "step_result", "message", "cancel", "cleanup"] as const;
+export const PROJECT_AGENTS_POLICY_VALUES = ["deny", "confirm", "allow"] as const;
+export const AGENT_TEAM_ACTION_VALUES = ["catalog", "start", "run_status", "step_result", "message", "cancel", "cleanup", "list", "reattach"] as const;
 export const INVOCATION_AGENT_KIND_VALUES = ["inline", "library"] as const;
 export const THINKING_LEVEL_VALUES = ["inherit", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
 export const RUN_STATUS_VALUES = ["running", "succeeded", "mixed", "failed", "canceling", "canceled", "expired"] as const;
 export const STEP_STATUS_VALUES = ["pending", "running", "succeeded", "failed", "blocked", "timed_out", "canceled"] as const;
 export const MESSAGE_CHANNEL_VALUES = ["steer", "follow_up"] as const;
 export const NOTIFY_MODE_VALUES = ["none", "final", "milestones"] as const;
-export const SUBAGENT_SKILL_MODE_VALUES = ["enabled", "disabled"] as const;
+export const SUBAGENT_SKILL_MODE_VALUES = ["enabled", "disabled", "auto"] as const;
+export const WORKTREE_ISOLATION_VALUES = ["worktree"] as const;
 export const PUBLIC_ID_PATTERN = "^[a-z][a-z0-9-]{0,62}$";
 export const RUN_ID_PATTERN = "^r[1-9][0-9]{0,6}$";
+export const SCHEDULE_ID_PATTERN = "^s[1-9][0-9]{0,6}$";
 export const SOURCE_QUALIFIED_LIBRARY_REF_PATTERN = "^(package|user|project):[a-z][a-z0-9-]{0,62}$";
 export const TOOL_NAME_PATTERN = "^[A-Za-z][A-Za-z0-9_-]{0,63}$";
 export const BUILTIN_CHILD_TOOL_NAMES = ["read", "grep", "find", "ls", "bash", "edit", "write"] as const;
@@ -39,6 +45,8 @@ export const SKILL_NAME_PATTERN = "^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?
 export type BuiltinChildToolName = (typeof BUILTIN_CHILD_TOOL_NAMES)[number];
 export type ExtensionSourceScope = (typeof EXTENSION_SOURCE_SCOPE_VALUES)[number];
 export type ExtensionSourceOrigin = (typeof EXTENSION_SOURCE_ORIGIN_VALUES)[number];
+export type ExtensionToolTrustPolicy = "deny" | "allow";
+
 export const MAX_STEPS = 16;
 export const MAX_DEPENDENCIES_PER_STEP = 12;
 export const MAX_CONCURRENCY = 6;
@@ -90,6 +98,7 @@ export interface AgentDiagnostic {
 export interface LibraryOptions {
 	sources: LibrarySource[];
 	query: string | undefined;
+	projectAgents: ProjectAgentsPolicy;
 }
 
 export interface GraphLibraryOptions {
@@ -101,6 +110,8 @@ export interface GraphAuthority {
 	allowShellTools: boolean;
 	allowMutationTools: boolean;
 	allowExtensionCode: boolean;
+	allowProjectCode: boolean;
+	allowMutationWorktree: boolean;
 }
 
 export interface TeamLimits {
@@ -114,10 +125,44 @@ export interface NotifyOptions {
 	minIntervalSeconds: number;
 }
 
+export interface ScheduleSpec {
+	/** Interval format: "30s", "5m", "1h", "2d". Range 1s–30d. Fires repeatedly. */
+	interval?: string;
+	/** One-shot: ISO timestamp ("2026-12-25T09:00:00Z") OR relative "+10m". Range +0…+30d. */
+	oneShot?: string;
+}
+
+export interface ScheduledRunSummary {
+	scheduleId: string;
+	kind: "interval" | "oneShot";
+	intervalMs: number | undefined;
+	nextFireAt: string | undefined;
+	createdAt: string;
+	fireCount: number;
+	lastFireAt: string | undefined;
+	lastFireError: string | undefined;
+	ownerSessionId: string | undefined;
+	objective: string;
+	stepCount: number;
+}
+
+export interface ScheduleRegistrationReceipt {
+	scheduleId: string;
+	kind: "interval" | "oneShot";
+	nextFireAt: string | undefined;
+}
+
+export interface ScheduleCancelReceipt {
+	scheduleId: string;
+	canceled: boolean;
+	reason: string | undefined;
+}
+
 export interface StartOptions {
 	maxRunSeconds: number;
 	terminalRetentionSeconds: number;
 	notify: NotifyOptions;
+	schedule: ScheduleSpec | undefined;
 }
 
 export interface AgentConfig {
@@ -141,6 +186,7 @@ export interface AgentDiscoveryResult {
 	userAgentsDir: string;
 	projectAgentsDir: string | undefined;
 	sources: LibrarySource[];
+	projectAgents: ProjectAgentsPolicy;
 }
 
 export interface ExtensionToolProvenanceSpec {
@@ -152,6 +198,11 @@ export interface ExtensionToolProvenanceSpec {
 export interface ExtensionToolGrantSpec {
 	name: string;
 	from: ExtensionToolProvenanceSpec;
+}
+
+export interface ExtensionToolPolicy {
+	projectExtensions: ExtensionToolTrustPolicy;
+	localExtensions: ExtensionToolTrustPolicy;
 }
 
 export interface ParentSkillSourceInfo {
@@ -241,13 +292,31 @@ export interface GraphStepAgentInput extends GraphStepAgentSharedInput {
 	ref?: string;
 }
 
+export interface StepOutputLimitSpec {
+	/** Per-step soft cap on retained assistant output bytes. Must be a positive integer <= MAX_STEP_OUTPUT_BYTES. Clamps the global per-step cap downward. Useful for keeping low-output steps tightly bounded; raising above the global cap is denied at planning time. */
+	maxBytes?: number;
+	/** Per-step soft cap on number of non-empty assistant final messages. Must be a positive integer <= MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP. */
+	maxAssistantFinals?: number;
+}
+
+export interface WorktreeSetupSpec {
+	/** When true, symlink `node_modules/` from the invocation cwd into the worktree root if present. */
+	propagateNodeModules?: boolean;
+	/** Additional relative paths to symlink from invocation cwd into the worktree. Must not escape; must exist as a file or directory in the source. */
+	symlinkPaths?: string[];
+}
+
 export interface GraphStepInput {
 	id: string;
 	agent: GraphStepAgentInput;
 	task: string;
+	mutationScope?: string;
 	needs?: string[];
 	after?: string[];
 	cwd?: string;
+	isolation?: WorktreeIsolationMode;
+	worktreeSetup?: WorktreeSetupSpec;
+	outputLimit?: StepOutputLimitSpec;
 }
 
 export interface GraphSpecInput {
@@ -285,10 +354,30 @@ export interface TeamStepSpec {
 	id: string;
 	agent: ResolvedAgent;
 	task: string;
+	mutationScope: string | undefined;
 	needs: string[];
 	after: string[];
 	cwd: string;
 	cwdIdentity: CwdIdentity;
+	isolation: WorktreeIsolationMode | undefined;
+	worktreeSetup: WorktreeSetupSpec | undefined;
+	outputLimit: StepOutputLimitSpec | undefined;
+}
+
+export interface MutationWorktreeState {
+	stepId: string;
+	worktreePath: string;
+	branchName: string;
+	baseCommit: string;
+	repoRoot: string;
+}
+
+export interface WorktreeTeardownEvidence {
+	diffStat: string | undefined;
+	patchPath: string | undefined;
+	branchName: string;
+	baseCommit: string;
+	cleanupWarnings: string[];
 }
 
 export interface ResolvedGraph {
@@ -357,6 +446,10 @@ export interface StepSnapshot {
 	cwd?: string;
 	stopReason?: string;
 	upstreamArtifacts?: StepArtifactReference[];
+	isolation?: WorktreeIsolationMode;
+	worktreeDiffStat?: string;
+	worktreePatchPath?: string;
+	worktreeBranch?: string;
 }
 
 export interface StepOutput {
@@ -424,6 +517,54 @@ export interface CatalogExtensionToolSummary {
 	description: string | undefined;
 	from: ExtensionToolProvenanceSpec;
 	active: boolean;
+	requiresProjectCode?: boolean;
+}
+
+export interface ListedRunSummary {
+	runId: string;
+	status: string;
+	terminal: boolean;
+	owned: boolean;
+	owner: "this-session" | "foreign-session" | "orphan" | "unknown";
+	ownerPid: number | undefined;
+	ownerPidAlive: boolean | undefined;
+	ownerSessionId: string | undefined;
+	createdAt: string;
+	updatedAt: string | undefined;
+	terminalAt: string | undefined;
+	invocationCwd: string | undefined;
+	objective: string | undefined;
+	runDir: string;
+	worktreeCount: number;
+	worktreesPendingCleanup: number;
+}
+
+export interface ReattachSnapshot {
+	runId: string;
+	runDir: string;
+	owned: boolean;
+	owner: "this-session" | "foreign-session" | "orphan" | "unknown";
+	manifest: {
+		runId: string;
+		createdAt: string;
+		invocationCwd: string;
+		objective: string;
+		ownerPid: number;
+		ownerSessionId: string | undefined;
+		piVersion: string | undefined;
+		terminalRetentionSeconds: number;
+	};
+	status: {
+		status: string;
+		updatedAt: string;
+		terminal: boolean;
+		terminalAt: string | undefined;
+	} | undefined;
+	worktrees: { stepId: string; worktreePath: string; branchName: string; baseCommit: string; repoRoot: string; cleanedUp: boolean }[];
+	artifactPaths: { name: string; path: string; size: number }[];
+	readOnly: true;
+	controlDenied: boolean;
+	controlDeniedReason: string | undefined;
 }
 
 export interface AgentTeamDetails {
@@ -444,6 +585,11 @@ export interface AgentTeamDetails {
 	message: MessageReceipt | undefined;
 	cleanup: CleanupReceipt | undefined;
 	notice: AgentTeamNotice | undefined;
+	listedRuns: ListedRunSummary[] | undefined;
+	reattach: ReattachSnapshot | undefined;
+	scheduledRuns: ScheduledRunSummary[] | undefined;
+	scheduleRegistration: ScheduleRegistrationReceipt | undefined;
+	scheduleCancel: ScheduleCancelReceipt | undefined;
 }
 
 export interface AgentInvocationDefaults {

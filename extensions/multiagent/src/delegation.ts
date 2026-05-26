@@ -11,7 +11,9 @@ import { finalizeDetails, hasDiagnosticError, makeDetails, type AgentTeamRuntime
 import { schemaRepair } from "./schema-repair.ts";
 import { catalogParentExtensionToolDiagnostics } from "./tool-policy.ts";
 import { AgentTeamSchema, type AgentTeamInput, type GraphSpec } from "./schemas.ts";
-import type { AgentDiagnostic, AgentTeamDetails, RunSnapshot } from "./types.ts";
+import { listPersistedRuns, readPersistedRun, type PersistedRunListing } from "./persistent-run-state.ts";
+import { isScheduleId, ScheduledRunRegistry } from "./scheduled-runs.ts";
+import type { AgentDiagnostic, AgentTeamDetails, ListedRunSummary, ReattachSnapshot, RunSnapshot } from "./types.ts";
 import { AGENT_TEAM_ACTION_VALUES, DEFAULT_GRAPH_LIBRARY_SOURCES, DEFAULT_RESULT_PREVIEW_MAX_BYTES, MAX_LIVE_DETACHED_RUNS, MAX_RETAINED_DETACHED_RUNS, type ExecutionAction } from "./types.ts";
 
 const validateAgentTeamInput = Compile(AgentTeamSchema);
@@ -34,7 +36,107 @@ export async function runAgentTeam(rawInput: unknown, options: AgentTeamRuntimeO
 	if (input.action === "message") return finalizeDetails(await message(input, options, diagnostics));
 	if (input.action === "cancel") return finalizeDetails(cancel(input, options, diagnostics));
 	if (input.action === "cleanup") return finalizeDetails(cleanup(input, options, diagnostics));
+	if (input.action === "list") return finalizeDetails(list(input, options, diagnostics));
+	if (input.action === "reattach") return finalizeDetails(reattach(input, options, diagnostics));
 	return finalizeDetails(makeDetails("missing/invalid", false, diagnostics, options, undefined, { code: "action-invalid", message: "Unknown action." }));
+}
+
+function list(_input: AgentTeamInput, options: AgentTeamRuntimeOptions, diagnostics: AgentDiagnostic[]): AgentTeamDetails {
+	const persisted = listPersistedRuns();
+	const memoryRuns = listDetachedRuns();
+	// NEU-C: include scheduled runs in the list payload (orthogonal to listedRuns).
+	const scheduledRuns = options.scheduledRunRegistry?.list();
+	const memoryByRunId = new Map(memoryRuns.map((run) => [run.id, run]));
+	const summaries: ListedRunSummary[] = [];
+	const persistedRunIds = new Set<string>();
+	for (const listing of persisted) {
+		persistedRunIds.add(listing.runId);
+		summaries.push(buildListingSummary(listing, memoryByRunId.get(listing.runId), options));
+	}
+	// In-memory runs that did not (yet) produce a persistent record (e.g. persistence unavailable
+	// for that run). Surface them so the operator can see they exist.
+	for (const memRun of memoryRuns) {
+		if (persistedRunIds.has(memRun.id)) continue;
+		const snap = memRun.snapshot();
+		summaries.push({
+			runId: memRun.id,
+			status: snap.status,
+			terminal: snap.terminal,
+			owned: memRun.isOwnedBy(options.sessionId),
+			owner: memRun.isOwnedBy(options.sessionId) ? "this-session" : "foreign-session",
+			ownerPid: process.pid,
+			ownerPidAlive: true,
+			ownerSessionId: undefined,
+			createdAt: snap.createdAt,
+			updatedAt: snap.updatedAt,
+			terminalAt: undefined,
+			invocationCwd: undefined,
+			objective: snap.objective,
+			runDir: "<memory-only>",
+			worktreeCount: 0,
+			worktreesPendingCleanup: 0,
+		});
+	}
+	summaries.sort((a, b) => a.runId.localeCompare(b.runId));
+	return makeDetails("list", true, diagnostics, options, { listedRuns: summaries, scheduledRuns });
+}
+
+function buildListingSummary(listing: PersistedRunListing, memoryRun: import("./detached-run.ts").DetachedRun | undefined, options: AgentTeamRuntimeOptions): ListedRunSummary {
+	const manifest = listing.manifest;
+	const owned = memoryRun ? memoryRun.isOwnedBy(options.sessionId) : false;
+	let owner: ListedRunSummary["owner"];
+	if (owned) owner = "this-session";
+	else if (listing.lockHolderAlive) owner = "foreign-session";
+	else if (listing.lockExistedButStale || !listing.lockHeldByPid) owner = "orphan";
+	else owner = "unknown";
+	return {
+		runId: listing.runId,
+		status: listing.status?.status ?? (memoryRun?.snapshot().status ?? "unknown"),
+		terminal: listing.status?.terminal ?? memoryRun?.snapshot().terminal ?? false,
+		owned,
+		owner,
+		ownerPid: listing.lockHeldByPid ?? manifest?.ownerPid,
+		ownerPidAlive: listing.lockHeldByPid === undefined ? undefined : listing.lockHolderAlive,
+		ownerSessionId: manifest?.ownerSessionId,
+		createdAt: manifest?.createdAt ?? listing.status?.updatedAt ?? new Date(0).toISOString(),
+		updatedAt: listing.status?.updatedAt,
+		terminalAt: listing.status?.terminalAt,
+		invocationCwd: manifest?.invocationCwd,
+		objective: manifest?.objective,
+		runDir: listing.runDir,
+		worktreeCount: listing.worktrees.length,
+		worktreesPendingCleanup: listing.worktrees.filter((w) => !w.cleanedUp).length,
+	};
+}
+
+function reattach(input: AgentTeamInput, options: AgentTeamRuntimeOptions, diagnostics: AgentDiagnostic[]): AgentTeamDetails {
+	if (!input.runId) return makeDetails("reattach", false, diagnostics, options, undefined, { code: "run-id-required", message: "reattach requires runId." });
+	const listing = readPersistedRun(input.runId);
+	if (!listing) return makeDetails("reattach", false, diagnostics, options, undefined, { code: "reattach-run-not-found", message: `No persisted run state found for runId "${input.runId}". Use the list action to discover available runs (orphaned and terminal runs are visible if they have persistent state on disk).` });
+	if (!listing.manifest) return makeDetails("reattach", false, diagnostics, options, undefined, { code: "reattach-manifest-missing", message: `Persistent run dir for ${input.runId} exists but manifest.json is missing or unparseable; this may be a half-created run. Inspect ${listing.runDir} directly.` });
+	const memoryRun = getDetachedRun(input.runId);
+	const owned = memoryRun ? memoryRun.isOwnedBy(options.sessionId) : false;
+	let owner: ReattachSnapshot["owner"];
+	if (owned) owner = "this-session";
+	else if (listing.lockHolderAlive) owner = "foreign-session";
+	else if (listing.lockExistedButStale || !listing.lockHeldByPid) owner = "orphan";
+	else owner = "unknown";
+	const controlDenied = owner !== "this-session";
+	const controlDeniedReason = controlDenied ? `reattach returned a read-only snapshot. mutation actions (message, cancel, cleanup) on runs owned by ${owner === "foreign-session" ? "another live Pi session" : owner === "orphan" ? "a dead owner process" : "an unknown owner"} are denied. See operator runbook for orphan recovery options.` : undefined;
+	const snapshot: ReattachSnapshot = {
+		runId: listing.runId,
+		runDir: listing.runDir,
+		owned,
+		owner,
+		manifest: listing.manifest,
+		status: listing.status ? { status: listing.status.status, updatedAt: listing.status.updatedAt, terminal: listing.status.terminal, terminalAt: listing.status.terminalAt } : undefined,
+		worktrees: listing.worktrees.map((w) => ({ stepId: w.stepId, worktreePath: w.worktreePath, branchName: w.branchName, baseCommit: w.baseCommit, repoRoot: w.repoRoot, cleanedUp: w.cleanedUp })),
+		artifactPaths: listing.artifactPaths,
+		readOnly: true,
+		controlDenied,
+		controlDeniedReason,
+	};
+	return makeDetails("reattach", true, diagnostics, options, { reattach: snapshot });
 }
 
 function catalog(input: AgentTeamInput, options: AgentTeamRuntimeOptions, diagnostics: AgentDiagnostic[]): AgentTeamDetails {
@@ -47,8 +149,14 @@ function start(input: AgentTeamInput, options: AgentTeamRuntimeOptions, diagnost
 	if (options.signal?.aborted) return makeDetails("start", false, diagnostics, options, undefined, { code: "start-aborted-before-run-id", message: "Start was aborted before a runId was registered; no child process was launched." });
 	const graph = input.graph as GraphSpec | undefined;
 	if (!graph) return makeDetails("start", false, diagnostics, options, undefined, { code: "start-graph-missing", message: "Start requires graph or graphFile." });
+	// NEU-C: if schedule is set, register the schedule instead of spawning the graph now.
+	if (input.options?.schedule && options.scheduledRunRegistry) {
+		const result = options.scheduledRunRegistry.register({ spec: input.options.schedule, graph, ownerSessionId: options.sessionId });
+		if (!result.ok) return makeDetails("start", false, diagnostics, options, undefined, { code: "schedule-invalid", message: result.error });
+		return makeDetails("start", true, diagnostics, options, { scheduleRegistration: { scheduleId: result.id, kind: result.parsed.kind, nextFireAt: result.parsed.firesAtIso ?? new Date(Date.now() + result.parsed.milliseconds).toISOString() } });
+	}
 	const librarySources = graph.library?.sources && graph.library.sources.length > 0 ? graph.library.sources : DEFAULT_GRAPH_LIBRARY_SOURCES;
-	const library = normalizeLibraryOptions({ sources: librarySources });
+	const library = normalizeLibraryOptions({ sources: librarySources, projectAgents: graph.authority?.allowProjectCode ? "allow" : "deny" });
 	const discovery = discoverAgents({ cwd: options.cwd, packageAgentsDir: options.packageAgentsDir, library });
 	const resolved = resolveDetachedGraph(graph, discovery.agents, [...diagnostics, ...discovery.diagnostics], { cwd: options.cwd, invocationCwd: options.cwd, parentTools: options.parentTools ?? unavailableTools(), parentSkills: options.parentSkills, subagentSkillMode: options.subagentSkills?.mode }, input.options);
 	if (resolved.steps.length !== graph.steps.length || hasDiagnosticError(resolved.diagnostics)) return makeDetails("start", false, resolved.diagnostics, options, { library: { ...library, sources: discovery.sources } }, { code: "start-planning-failed", message: "Detached graph planning failed; no child process was launched." });
@@ -92,6 +200,13 @@ async function message(input: AgentTeamInput, options: AgentTeamRuntimeOptions, 
 }
 
 function cancel(input: AgentTeamInput, options: AgentTeamRuntimeOptions, diagnostics: AgentDiagnostic[]): AgentTeamDetails {
+	// NEU-C: scheduleId takes precedence; falls back to runId routing.
+	const scheduleId = input.scheduleId ?? (input.runId && isScheduleId(input.runId) ? input.runId : undefined);
+	if (scheduleId && options.scheduledRunRegistry) {
+		const result = options.scheduledRunRegistry.cancel(scheduleId, options.sessionId);
+		if (!result.ok) return makeDetails("cancel", false, diagnostics, options, undefined, { code: "schedule-cancel-failed", message: result.error });
+		return makeDetails("cancel", true, diagnostics, options, { scheduleCancel: { scheduleId, canceled: true, reason: input.reason } });
+	}
 	const run = getOwnedDetachedRun(input.runId, options);
 	if (!run) return makeDetails("cancel", false, diagnostics, options, undefined, runNotFoundError(options));
 	run.cancel(input.reason);

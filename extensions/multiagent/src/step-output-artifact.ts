@@ -5,12 +5,12 @@ import type { BackgroundEventStore } from "./background-events.ts";
 import { boundedFinalPreview, buildStepFinalArtifact, formatAssistantFinalMessages, formatNonFinalText } from "./detached-output.ts";
 import type { StepState } from "./detached-state.ts";
 import { recordRuntimeDiagnostic } from "./runtime-diagnostics.ts";
-import type { AgentDiagnostic, StepArtifactReference, StepOutput, StepStatus } from "./types.ts";
+import type { AgentDiagnostic, StepArtifactReference, StepOutput, StepStatus, WorktreeTeardownEvidence } from "./types.ts";
 
-export function createStepOutputArtifact(input: { runId: string; objective: string; artifactStore: RunArtifactStore; diagnostics: AgentDiagnostic[]; events: BackgroundEventStore; state: StepState; status: StepStatus; text: string; assistantFinals?: string[]; nonFinalText?: string; stopReason?: string; upstreamArtifacts?: StepArtifactReference[] }): StepOutput {
+export function createStepOutputArtifact(input: { runId: string; objective: string; artifactStore: RunArtifactStore; diagnostics: AgentDiagnostic[]; events: BackgroundEventStore; state: StepState; status: StepStatus; text: string; assistantFinals?: string[]; nonFinalText?: string; stopReason?: string; upstreamArtifacts?: StepArtifactReference[]; worktree?: WorktreeTeardownEvidence }): StepOutput {
 	const assistantFinals = input.assistantFinals ?? [];
 	const outputText = outputTextForStep(input.text, assistantFinals, input.nonFinalText);
-	const content = buildStepFinalArtifact({ runId: input.runId, objective: input.objective, step: input.state.spec, status: input.status, startedAt: input.state.startedAt, endedAt: now(), text: input.text, assistantFinals, nonFinalText: input.nonFinalText, stopReason: input.stopReason, upstreamArtifacts: input.upstreamArtifacts ?? [] });
+	const content = buildStepFinalArtifact({ runId: input.runId, objective: input.objective, step: input.state.spec, status: input.status, startedAt: input.state.startedAt, endedAt: now(), text: input.text, assistantFinals, nonFinalText: input.nonFinalText, stopReason: input.stopReason, upstreamArtifacts: input.upstreamArtifacts ?? [], worktree: input.worktree });
 	try {
 		const record = writeRunArtifact(input.artifactStore, `${input.state.spec.id}-final.md`, `step-final:${input.state.spec.id}`, content);
 		return { stepId: input.state.spec.id, status: input.status, text: boundedFinalPreview(outputText), filePath: record.path, chars: outputText.length };

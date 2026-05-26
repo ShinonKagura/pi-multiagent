@@ -10,6 +10,7 @@ type PreflightField =
 	| "library"
 	| "options"
 	| "runId"
+	| "scheduleId"
 	| "cursor"
 	| "stepId"
 	| "waitSeconds"
@@ -22,12 +23,8 @@ type PreflightField =
 	| "clientMessageId"
 	| "reason"
 	| "objective"
-	| "agents"
 	| "steps"
-	| "synthesis"
 	| "limits"
-	| "outputContract"
-	| "callerSkills"
 	| "authority"
 	| "extensionTools";
 
@@ -42,8 +39,10 @@ const ACTION_RULES: Record<ExecutionAction, ActionRule> = {
 	run_status: { allowed: ["action", "runId", "cursor", "stepId", "waitSeconds", "maxBytes", "preview", "debugEvents"], controlCode: "run_status-control-fields-denied" },
 	step_result: { allowed: ["action", "runId", "stepId", "maxBytes", "preview"], controlCode: "step_result-control-fields-denied" },
 	message: { allowed: ["action", "runId", "stepId", "channel", "text", "clientMessageId"], controlCode: "message-control-fields-denied" },
-	cancel: { allowed: ["action", "runId", "reason"], controlCode: "cancel-control-fields-denied" },
+	cancel: { allowed: ["action", "runId", "scheduleId", "reason"], controlCode: "cancel-control-fields-denied" },
 	cleanup: { allowed: ["action", "runId"], controlCode: "cleanup-control-fields-denied" },
+	list: { allowed: ["action"], controlCode: "list-control-fields-denied" },
+	reattach: { allowed: ["action", "runId"], controlCode: "reattach-control-fields-denied" },
 };
 
 const KNOWN_FIELDS: readonly PreflightField[] = [
@@ -53,6 +52,7 @@ const KNOWN_FIELDS: readonly PreflightField[] = [
 	"library",
 	"options",
 	"runId",
+	"scheduleId",
 	"cursor",
 	"stepId",
 	"waitSeconds",
@@ -65,17 +65,18 @@ const KNOWN_FIELDS: readonly PreflightField[] = [
 	"clientMessageId",
 	"reason",
 	"objective",
-	"agents",
 	"steps",
-	"synthesis",
 	"limits",
-	"outputContract",
-	"callerSkills",
 	"authority",
 	"extensionTools",
 ];
 
-const GRAPH_BODY_FIELDS = new Set<PreflightField>(["objective", "steps", "limits", "authority", "agents", "synthesis", "outputContract", "callerSkills"]);
+// Graph body fields recognized for the start "move under graph" repair message.
+// Kept in sync with schemas.ts GraphSchema (objective, library, authority, steps, limits).
+// Historical fields agents/synthesis/outputContract/callerSkills were removed because
+// GraphSchema rejects them under additionalProperties:false, so preflight should not
+// invite users to relocate them there. callerSkills is agent-frontmatter, not graph-body.
+const GRAPH_BODY_FIELDS = new Set<PreflightField>(["objective", "steps", "limits", "authority"]);
 
 /** Return fail-closed diagnostics for controls that are invalid for the selected action. */
 export function validatePreflightShape(rawInput: unknown): AgentDiagnostic[] {
@@ -111,8 +112,9 @@ function validateRequiredControls(action: ExecutionAction, input: Record<string,
 		else if (!MESSAGE_CHANNEL_VALUES.includes(channel as (typeof MESSAGE_CHANNEL_VALUES)[number])) diagnostics.push(diagnostic("message-channel-invalid", `Unknown message channel: ${channel}.`, "/channel", action, ["channel"], 'Use channel:"steer" or channel:"follow_up".'));
 		if (!nonEmptyStringField(input, "text")) diagnostics.push(diagnostic("message-text-required", "Message requires non-empty text.", "/text", action, ["text"], "Send one bounded clarification or scope repair. Do not request premature finals just because the parent is waiting."));
 	}
-	if (action === "cancel" && !stringField(input, "runId")) diagnostics.push(diagnostic("run-id-required", "cancel requires runId.", "/runId", action, ["runId"], "Use the runId returned by start."));
+	if (action === "cancel" && !stringField(input, "runId") && !stringField(input, "scheduleId")) diagnostics.push(diagnostic("run-id-required", "cancel requires runId or scheduleId.", "/runId", action, ["runId", "scheduleId"], "Use the runId returned by start, or the scheduleId returned by start when options.schedule was set."));
 	if (action === "cleanup" && !stringField(input, "runId")) diagnostics.push(diagnostic("run-id-required", "cleanup requires runId.", "/runId", action, ["runId"], "Use cleanup only after terminal run_status/step_result evidence is preserved."));
+	if (action === "reattach" && !stringField(input, "runId")) diagnostics.push(diagnostic("run-id-required", "reattach requires runId.", "/runId", action, ["runId"], "Use a runId discovered via the list action; reattach returns a read-only snapshot of an orphaned or terminal run from persistent state."));
 }
 
 function misplacedFields(input: Record<string, unknown>, allowedFields: readonly PreflightField[]): string[] {

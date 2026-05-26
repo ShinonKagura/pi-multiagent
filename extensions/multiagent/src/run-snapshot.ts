@@ -27,9 +27,13 @@ export function buildStepSnapshots(states: Iterable<StepState>, activity: StepAc
 		outputFilePath: state.output?.filePath,
 		outputChars: state.output?.chars,
 		taskPreview: taskPreview(state.spec.task),
-		cwd: state.spec.cwd,
+		cwd: state.worktreeState?.worktreePath ?? state.spec.cwd,
 		stopReason: state.errorMessage ?? (isTerminalStepStatus(state.status) ? state.status : undefined),
 		upstreamArtifacts: upstreamArtifactReferences(state.spec, byId),
+		isolation: state.spec.isolation,
+		worktreeDiffStat: state.worktreeEvidence?.diffStat,
+		worktreePatchPath: state.worktreeEvidence?.patchPath,
+		worktreeBranch: state.worktreeState?.branchName,
 	}));
 }
 

@@ -1,6 +1,6 @@
 /** Final-output helpers for detached runs. */
 
-import type { RunStatus, StepArtifactReference, StepOutput, StepStatus, TeamStepSpec } from "./types.ts";
+import type { RunStatus, StepArtifactReference, StepOutput, StepStatus, TeamStepSpec, WorktreeTeardownEvidence } from "./types.ts";
 
 export const FINAL_INLINE_PREVIEW_CHARS = 6000;
 
@@ -16,10 +16,11 @@ interface StepFinalArtifactInput {
 	nonFinalText: string | undefined;
 	stopReason: string | undefined;
 	upstreamArtifacts: StepArtifactReference[];
+	worktree?: WorktreeTeardownEvidence;
 }
 
 export function buildStepFinalArtifact(input: StepFinalArtifactInput): string {
-	return [
+	const sections: string[] = [
 		"# agent_team step final",
 		"",
 		`runId: ${input.runId}`,
@@ -33,6 +34,8 @@ export function buildStepFinalArtifact(input: StepFinalArtifactInput): string {
 		`thinking: ${input.step.agent.thinking ?? "inherit"}`,
 		`effectiveTools: ${input.step.agent.tools.length > 0 ? input.step.agent.tools.join(", ") : "none"}`,
 		`extensionTools: ${input.step.agent.extensionTools.length > 0 ? input.step.agent.extensionTools.map((tool) => tool.name).join(", ") : "none"}`,
+		`mutationScope: ${input.step.mutationScope ?? "none"}`,
+		`isolation: ${input.step.isolation ?? "none"}`,
 		`cwd: ${input.step.cwd ?? "default"}`,
 		`needs: ${input.step.needs.length > 0 ? input.step.needs.join(", ") : "none"}`,
 		`after: ${input.step.after.length > 0 ? input.step.after.join(", ") : "none"}`,
@@ -41,13 +44,27 @@ export function buildStepFinalArtifact(input: StepFinalArtifactInput): string {
 		"",
 		"## Upstream artifacts",
 		formatUpstreamArtifacts(input.upstreamArtifacts),
-		"",
-		"## Task",
-		"",
-		input.step.task,
-		"",
-		formatStepFinalBody(input.text, input.assistantFinals, input.nonFinalText),
-	].join("\n");
+	];
+	if (input.worktree) {
+		sections.push("", "## Worktree isolation evidence", formatWorktreeEvidence(input.worktree));
+	}
+	sections.push("", "## Task", "", input.step.task, "", formatStepFinalBody(input.text, input.assistantFinals, input.nonFinalText));
+	return sections.join("\n");
+}
+
+function formatWorktreeEvidence(evidence: WorktreeTeardownEvidence): string {
+	const lines: string[] = [
+		`branch: ${evidence.branchName}`,
+		`baseCommit: ${evidence.baseCommit}`,
+		`patchPath: ${evidence.patchPath ?? "none (no mutations recorded)"}`,
+		`diffStat:`,
+		evidence.diffStat ? evidence.diffStat : "  (no diff)",
+	];
+	if (evidence.cleanupWarnings.length > 0) {
+		lines.push(`cleanupWarnings:`);
+		for (const warning of evidence.cleanupWarnings) lines.push(`- ${warning}`);
+	}
+	return lines.join("\n");
 }
 
 function formatUpstreamArtifacts(upstreamArtifacts: StepArtifactReference[]): string {

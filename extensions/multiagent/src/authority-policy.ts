@@ -1,6 +1,6 @@
 /** Shared graph authority normalization and policy derivation. */
 
-import type { GraphAuthority } from "./types.ts";
+import type { ExtensionToolPolicy, GraphAuthority } from "./types.ts";
 import { MUTATION_CHILD_TOOL_NAMES, READONLY_CHILD_TOOL_NAMES, SHELL_CHILD_TOOL_NAMES, type BuiltinChildToolName } from "./types.ts";
 
 export type BuiltinToolAuthorityKind = "filesystem-read" | "shell" | "mutation";
@@ -10,6 +10,8 @@ export const GRAPH_AUTHORITY_KEYS: readonly (keyof GraphAuthority)[] = [
 	"allowShellTools",
 	"allowMutationTools",
 	"allowExtensionCode",
+	"allowProjectCode",
+	"allowMutationWorktree",
 ];
 
 export const BUILTIN_TOOL_AUTHORITY_MATRIX: readonly { kind: BuiltinToolAuthorityKind; tools: readonly BuiltinChildToolName[]; authority: keyof GraphAuthority }[] = [
@@ -24,7 +26,14 @@ export function normalizeAuthority(authority: Partial<GraphAuthority> | undefine
 		allowShellTools: authority?.allowShellTools ?? false,
 		allowMutationTools: authority?.allowMutationTools ?? false,
 		allowExtensionCode: authority?.allowExtensionCode ?? false,
+		allowProjectCode: authority?.allowProjectCode ?? false,
+		allowMutationWorktree: authority?.allowMutationWorktree ?? false,
 	};
+}
+
+export function extensionToolPolicyFromAuthority(authority: GraphAuthority): ExtensionToolPolicy {
+	const projectCodePolicy = authority.allowProjectCode ? "allow" : "deny";
+	return { projectExtensions: projectCodePolicy, localExtensions: projectCodePolicy };
 }
 
 export function builtinToolAuthority(tool: string): keyof GraphAuthority | undefined {

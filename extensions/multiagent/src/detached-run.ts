@@ -24,6 +24,8 @@ import { buildRunSnapshot, buildStepSnapshots, countStepStatuses, findSinkStepId
 import { createStepOutputArtifact } from "./step-output-artifact.ts";
 import { stalledStepBlockerMessage } from "./stalled-step-diagnostics.ts";
 import { collectUpstreamOutputs } from "./upstream-outputs.ts";
+import { prepareWorktreeForStep, teardownWorktreeForStep, WorktreeError } from "./mutation-worktree.ts";
+import { createPersistentRun, deletePersistentRun, markWorktreeCleanedUp, mirrorArtifactToRunDir, recordWorktreeForStep, releasePersistentRun, updatePersistentRunStatus, type PersistentRunHandle } from "./persistent-run-state.ts";
 import type { AgentDiagnostic, AgentTeamDetails, LibraryOptions, MessageChannel, ResolvedGraph, RunStatus, RunStatusWaitReceipt, StepArtifactReference, StepStatus, TeamStepSpec } from "./types.ts";
 import { DEFAULT_RESULT_PREVIEW_MAX_BYTES as PREVIEW_BYTES } from "./types.ts";
 
@@ -48,6 +50,7 @@ export class DetachedRun {
 	private retentionTimer: ReturnType<typeof setTimeout> | undefined;
 	private readonly waiters = new RunWaiters();
 	private readonly runUi = createRunUiCallback((message) => this.recordDiagnostic("run-ui-callback-failed", "run-ui", message));
+	private readonly persistent: PersistentRunHandle | undefined;
 
 	constructor(id: string, graph: ResolvedGraph, options: AgentTeamRuntimeOptions, library: LibraryOptions) {
 		this.id = id;
@@ -59,13 +62,48 @@ export class DetachedRun {
 		this.artifactStore = createRunArtifactStore();
 		this.notifier = new RunNotifier({ runId: id, notify: graph.options.notify, runtimeOptions: options, recordDiagnostic: (code, label, message) => this.recordDiagnostic(code, label, message), isTerminal: () => this.snapshot().terminal, details: (notice) => this.details("run_status", { notice }) });
 		for (const step of graph.steps) this.states.set(step.id, createPendingStepState(step));
+		this.persistent = createPersistentRun({ runId: id, manifest: { runId: id, createdAt: this.createdAt, invocationCwd: options.cwd, objective: graph.objective, ownerPid: process.pid, ownerSessionId: options.sessionId, piVersion: undefined, terminalRetentionSeconds: graph.options.terminalRetentionSeconds } });
+		if (!this.persistent) {
+			// NEU-A B1a + F5 interlock: when persistence is unavailable, any worktree-isolated
+			// step would leak guaranteed on Pi crash because no on-disk worktrees.json record
+			// exists for the startup sweep to find. Fail closed at construction time instead
+			// of warning and proceeding; the operator must fix persistence (XDG_STATE_HOME /
+			// ~/.local/state writability or PI_MULTIAGENT_STATE_DIR override) before retrying.
+			const worktreeStepIds = graph.steps.filter((step) => step.isolation === "worktree").map((step) => step.id);
+			if (worktreeStepIds.length > 0) {
+				this.recordDiagnostic("persistent-run-unavailable-with-worktree", "persistent", `Persistent run state could not be initialized and steps [${worktreeStepIds.join(", ")}] request isolation:"worktree". Worktree leaks on Pi crash would be unrecoverable. Fix XDG_STATE_HOME / ~/.local/state writability or set PI_MULTIAGENT_STATE_DIR to a writable path, then retry. Failing closed.`);
+				this.status = "failed";
+				for (const state of this.states.values()) state.status = "failed";
+				this.appendEvent({ type: "run", label: "terminal", preview: "persistent-run-unavailable-with-worktree", status: "error" });
+			} else {
+				this.recordDiagnostic("persistent-run-unavailable", "persistent", "Persistent run state could not be initialized; run continues in memory only. No F5 worktree isolation is in use, so this run cannot leak worktrees. Pi crash will still lose in-flight observability of this run. Check XDG_STATE_HOME / ~/.local/state writability or PI_MULTIAGENT_STATE_DIR override.");
+			}
+		}
 	}
 
 	start(): void {
+		if (isTerminalRunStatus(this.status)) {
+			// Run was failed-closed in constructor (e.g. persistent-run-unavailable-with-worktree).
+			// Skip the normal start sequence and emit terminal notice for parent observability.
+			this.notifier.sendTerminal(this.status, ["pre-start fail-closed"]);
+			this.emitLifecycle("pi-multiagent:run-failed-pre-start", { runId: this.id, status: this.status });
+			this.scheduleRetention();
+			return;
+		}
 		this.appendEvent({ type: "run", label: "start", preview: `runId=${this.id}`, status: "running" });
+		this.emitLifecycle("pi-multiagent:run-started", { runId: this.id, objective: this.graph.objective, stepCount: this.graph.steps.length });
 		this.maxRunTimer = setTimeout(() => this.expire(), this.graph.options.maxRunSeconds * 1000);
 		unrefTimer(this.maxRunTimer);
 		queueMicrotask(() => void this.schedule());
+	}
+
+	/** G4: best-effort lifecycle event emission. Never throws. */
+	private emitLifecycle(eventName: string, payload: Record<string, unknown>): void {
+		try {
+			this.options.emitLifecycleEvent?.(eventName, payload);
+		} catch {
+			// ignore; events are best-effort
+		}
 	}
 
 	isOwnedBy(sessionId: string | undefined): boolean {
@@ -122,6 +160,7 @@ export class DetachedRun {
 		if (this.maxRunTimer) clearTimeout(this.maxRunTimer);
 		if (this.retentionTimer) clearTimeout(this.retentionTimer);
 		this.notifier.cancelTimers();
+		deletePersistentRun(this.persistent);
 		this.appendEvent({ type: "run", label: "cleanup", preview: `${deletedPaths.length} paths deleted`, status: "done" });
 		return { runId: this.id, deletedPaths };
 	}
@@ -203,20 +242,54 @@ export class DetachedRun {
 				this.finishState(state, "failed", cwdDenial);
 				return;
 			}
+			let effectiveCwd = state.spec.cwd;
+			if (state.spec.isolation === "worktree") {
+				try {
+					state.worktreeState = prepareWorktreeForStep({ invocationCwd: this.options.cwd ?? state.spec.cwd, stepId: state.spec.id, runId: this.id, worktreeSetup: state.spec.worktreeSetup });
+					effectiveCwd = state.worktreeState.worktreePath;
+					recordWorktreeForStep(this.persistent, { stepId: state.spec.id, worktreePath: state.worktreeState.worktreePath, branchName: state.worktreeState.branchName, baseCommit: state.worktreeState.baseCommit, repoRoot: state.worktreeState.repoRoot });
+					this.appendEvent({ stepId: state.spec.id, type: "step", label: "worktree-prepared", preview: `branch=${state.worktreeState.branchName} base=${state.worktreeState.baseCommit.slice(0, 8)}`, status: "running" });
+				} catch (error) {
+					const code = error instanceof WorktreeError ? error.code : "worktree-prepare-failed";
+					const message = error instanceof Error ? error.message : String(error);
+					this.finishState(state, "failed", `${code}: ${message}`);
+					return;
+				}
+			}
 			const task = buildDelegatedTask(this.graph.objective, state.spec, collectUpstreamOutputs(state.spec, this.states));
-			const controller = new RpcChildController({
-				agent: state.spec.agent,
-				defaults: this.options.defaults,
-				limits: this.graph.limits,
-				cwd: state.spec.cwd,
-				promptPath,
-				spawnProcess: this.options.spawnProcess ?? spawn,
-				ackTimeoutMs: this.options.rpcCommandAckTimeoutMs,
-				onText: (text) => this.updateLiveText(state, text),
-				onEvent: (event) => this.appendEvent({ ...event, stepId: state.spec.id }),
-			});
-			state.controller = controller;
-			this.finishFromRpcResult(state, await controller.run(task));
+			let rpcResult: RpcStepResult | undefined;
+			let rpcError: unknown;
+			try {
+				const controller = new RpcChildController({
+					agent: state.spec.agent,
+					defaults: this.options.defaults,
+					limits: this.graph.limits,
+					cwd: effectiveCwd,
+					promptPath,
+					spawnProcess: this.options.spawnProcess ?? spawn,
+					ackTimeoutMs: this.options.rpcCommandAckTimeoutMs,
+					outputLimit: state.spec.outputLimit,
+					onText: (text) => this.updateLiveText(state, text),
+					onEvent: (event) => this.appendEvent({ ...event, stepId: state.spec.id }),
+				});
+				state.controller = controller;
+				rpcResult = await controller.run(task);
+			} catch (error) {
+				rpcError = error;
+			} finally {
+				if (state.worktreeState) {
+					try {
+						state.worktreeEvidence = teardownWorktreeForStep({ state: state.worktreeState, artifactStore: this.artifactStore });
+						markWorktreeCleanedUp(this.persistent, state.spec.id);
+						this.appendEvent({ stepId: state.spec.id, type: "step", label: "worktree-torn-down", preview: state.worktreeEvidence.patchPath ? `patch=${state.worktreeEvidence.patchPath}` : "no patch", status: "done" });
+						for (const warning of state.worktreeEvidence.cleanupWarnings) this.recordDiagnostic("worktree-cleanup-warning", state.spec.id, warning);
+					} catch (error) {
+						this.recordDiagnostic("worktree-teardown-failed", state.spec.id, error instanceof Error ? error.message : String(error));
+					}
+				}
+			}
+			if (rpcResult) this.finishFromRpcResult(state, rpcResult);
+			else if (rpcError) this.finishState(state, "failed", rpcError instanceof Error ? rpcError.message : String(rpcError));
 		} catch (error) {
 			this.finishState(state, "failed", error instanceof Error ? error.message : String(error));
 		}
@@ -232,7 +305,12 @@ export class DetachedRun {
 	}
 
 	private createStepOutput(state: StepState, status: StepStatus, text: string, assistantFinals: string[] = [], stopReason?: string, nonFinalText?: string) {
-		return createStepOutputArtifact({ runId: this.id, objective: this.graph.objective, artifactStore: this.artifactStore, diagnostics: this.diagnostics, events: this.events, state, status, text, assistantFinals, stopReason, upstreamArtifacts: this.upstreamArtifactReferences(state.spec), nonFinalText });
+		const output = createStepOutputArtifact({ runId: this.id, objective: this.graph.objective, artifactStore: this.artifactStore, diagnostics: this.diagnostics, events: this.events, state, status, text, assistantFinals, stopReason, upstreamArtifacts: this.upstreamArtifactReferences(state.spec), nonFinalText, worktree: state.worktreeEvidence });
+		// G1: mirror the step final artifact and any worktree patch into the persistent
+		// run dir so reattach can find them after the original tmp RunArtifactStore is gone.
+		if (output.filePath) mirrorArtifactToRunDir(this.persistent, output.filePath, `${state.spec.id}-final.md`);
+		if (state.worktreeEvidence?.patchPath) mirrorArtifactToRunDir(this.persistent, state.worktreeEvidence.patchPath, `${state.spec.id}-worktree.patch`);
+		return output;
 	}
 
 	private updateLiveText(state: StepState, text: string) {
@@ -259,6 +337,7 @@ export class DetachedRun {
 		state.controller = undefined;
 		this.touch();
 		this.appendEvent({ stepId: state.spec.id, type: "step", label: "finish", preview: errorMessage ?? status, status });
+		this.emitLifecycle("pi-multiagent:step-finished", { runId: this.id, stepId: state.spec.id, status, agentRef: state.spec.agent.ref, isolation: state.spec.isolation, hasWorktreeEvidence: !!state.worktreeEvidence });
 		this.finalizeIfDone();
 		if (this.status === "running" && !this.snapshot().terminal) this.queueStepNotice(state, status);
 	}
@@ -271,7 +350,10 @@ export class DetachedRun {
 		this.touch();
 		if (this.maxRunTimer) clearTimeout(this.maxRunTimer);
 		this.appendEvent({ type: "run", label: "terminal", preview: this.status, status: "done" });
+		updatePersistentRunStatus(this.persistent, this.status, true);
+		releasePersistentRun(this.persistent);
 		this.notifier.sendTerminal(this.status, terminalStepNoticeReasons(snapshots));
+		this.emitLifecycle("pi-multiagent:run-completed", { runId: this.id, status: this.status, stepStatuses: Object.fromEntries(snapshots.map((s) => [s.id, s.status])) });
 		this.scheduleRetention();
 	}
 
