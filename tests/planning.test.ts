@@ -605,3 +605,31 @@ test("resolveDetachedGraph fails closed for authority and dependency violations"
 	assert.equal(codes.includes("dependency-unknown"), false);
 	assert.deepEqual(graph.steps, []);
 });
+
+test("resolveDetachedGraph carries per-step outputLimit through to TeamStepSpec", async () => {
+	const cwd = await mkdir(join(tmpdir(), `pi-multiagent-plan-outputlimit-${Date.now()}`), { recursive: true });
+	const withLimit = resolveDetachedGraph(
+		{
+			objective: "plumb outputLimit",
+			authority: { allowFilesystemRead: true },
+			steps: [{ id: "tight", agent: { system: "return ok" }, task: "x", outputLimit: { maxBytes: 2048, maxAssistantFinals: 3 } }],
+		},
+		[],
+		[],
+		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
+		undefined,
+	);
+	assert.equal(withLimit.diagnostics.length, 0, "valid graph should produce no diagnostics");
+	assert.equal(withLimit.steps.length, 1, "step should be resolved");
+	assert.deepEqual(withLimit.steps[0]?.outputLimit, { maxBytes: 2048, maxAssistantFinals: 3 }, "outputLimit must reach TeamStepSpec");
+
+	// Steps without outputLimit should carry undefined (defaults to package caps at runtime).
+	const withoutLimit = resolveDetachedGraph(
+		{ objective: "no outputLimit", authority: { allowFilesystemRead: true }, steps: [{ id: "open", agent: { system: "x" }, task: "x" }] },
+		[],
+		[],
+		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
+		undefined,
+	);
+	assert.equal(withoutLimit.steps[0]?.outputLimit, undefined, "omitted outputLimit must land as undefined on TeamStepSpec");
+});

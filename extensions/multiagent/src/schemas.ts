@@ -15,6 +15,7 @@ import {
 	EXTENSION_SOURCE_ORIGIN_VALUES,
 	EXTENSION_SOURCE_SCOPE_VALUES,
 	LIBRARY_SOURCE_VALUES,
+	MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP,
 	MAX_CLIENT_MESSAGE_ID_CHARS,
 	MAX_CONCURRENCY,
 	MAX_DEPENDENCIES_PER_STEP,
@@ -26,6 +27,7 @@ import {
 	MAX_RESULT_PREVIEW_BYTES,
 	MAX_RUN_STATUS_WAIT_SECONDS,
 	MAX_SHORT_TEXT_FIELD_CHARS,
+	MAX_STEP_OUTPUT_BYTES,
 	MAX_STEPS,
 	MAX_TERMINAL_RETENTION_SECONDS,
 	MAX_TEXT_FIELD_CHARS,
@@ -104,6 +106,14 @@ const StepAgentSchema = Type.Object(
 	{ ...StrictObjectOptions, description: "Step-local inline agent or source-qualified library agent. Set exactly one of system or ref. No invocation-local agent registry is used." },
 );
 
+const StepOutputLimitSchema = Type.Object(
+	{
+		maxBytes: Type.Optional(Type.Number({ description: `Per-step soft cap on retained assistant output bytes. Clamps the package-level cap downward; values above ${MAX_STEP_OUTPUT_BYTES} are rejected by schema validation.`, minimum: 1, maximum: MAX_STEP_OUTPUT_BYTES, multipleOf: 1 })),
+		maxAssistantFinals: Type.Optional(Type.Number({ description: `Per-step soft cap on number of non-empty assistant final messages. Maximum ${MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP}.`, minimum: 1, maximum: MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP, multipleOf: 1 })),
+	},
+	StrictObjectOptions,
+);
+
 const StepSchema = Type.Object(
 	{
 		id: publicId("Unique step id."),
@@ -112,6 +122,7 @@ const StepSchema = Type.Object(
 		needs: Type.Optional(Type.Array(publicId("Strict dependency step id; every listed step must succeed before this step starts."), { description: "Step ids that must succeed before this step starts.", maxItems: MAX_DEPENDENCIES_PER_STEP })),
 		after: Type.Optional(Type.Array(publicId("Terminal dependency step id; listed steps may succeed or fail before this step starts."), { description: "Step ids that must terminalize before this step starts, regardless of success or failure.", maxItems: MAX_DEPENDENCIES_PER_STEP })),
 		cwd: Type.Optional(nonEmptyText("Existing working directory for this step, resolved inside the invocation cwd.", MAX_PATH_FIELD_CHARS)),
+		outputLimit: Type.Optional(StepOutputLimitSchema),
 	},
 	StrictObjectOptions,
 );

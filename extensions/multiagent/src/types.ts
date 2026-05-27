@@ -241,6 +241,13 @@ export interface GraphStepAgentInput extends GraphStepAgentSharedInput {
 	ref?: string;
 }
 
+export interface StepOutputLimitSpec {
+	/** Per-step soft cap on retained assistant output bytes. Must be a positive integer <= MAX_STEP_OUTPUT_BYTES. Clamps the global per-step cap downward. Useful for keeping low-output steps tightly bounded; raising above the global cap is denied at planning time. */
+	maxBytes?: number;
+	/** Per-step soft cap on number of non-empty assistant final messages. Must be a positive integer <= MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP. */
+	maxAssistantFinals?: number;
+}
+
 export interface GraphStepInput {
 	id: string;
 	agent: GraphStepAgentInput;
@@ -248,6 +255,7 @@ export interface GraphStepInput {
 	needs?: string[];
 	after?: string[];
 	cwd?: string;
+	outputLimit?: StepOutputLimitSpec;
 }
 
 export interface GraphSpecInput {
@@ -289,6 +297,7 @@ export interface TeamStepSpec {
 	after: string[];
 	cwd: string;
 	cwdIdentity: CwdIdentity;
+	outputLimit: StepOutputLimitSpec | undefined;
 }
 
 export interface ResolvedGraph {

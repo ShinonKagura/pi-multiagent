@@ -34,7 +34,7 @@ export class RpcChildController {
 	private recoveringOverflow = false;
 	private output = "";
 	private assistantFinals: string[] = [];
-	private readonly outputBudget = new AssistantOutputBudget();
+	private readonly outputBudget: AssistantOutputBudget;
 	private liveText = "";
 	private stderr = "";
 	private readonly parentMessageBudget = new ParentMessageBudget();
@@ -47,6 +47,7 @@ export class RpcChildController {
 	constructor(options: RpcChildControllerOptions) {
 		this.options = options;
 		this.spawnProcess = options.spawnProcess ?? spawn;
+		this.outputBudget = new AssistantOutputBudget({ maxBytes: options.outputLimit?.maxBytes, maxAssistantFinals: options.outputLimit?.maxAssistantFinals });
 		const ackTimeoutMs = Number.isFinite(options.ackTimeoutMs) && options.ackTimeoutMs !== undefined && options.ackTimeoutMs > 0 ? Math.trunc(options.ackTimeoutMs) : ACK_TIMEOUT_MS;
 		this.commands = new RpcCommandQueue(ackTimeoutMs);
 	}

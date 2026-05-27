@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added optional per-step `outputLimit: { maxBytes?, maxAssistantFinals? }` to graph steps. Both fields clamp the package-level caps (`MAX_STEP_OUTPUT_BYTES`, `MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP`) downward only. Out-of-range and non-integer values are rejected by schema validation; an additional runtime clamp in `AssistantOutputBudget` serves as defense-in-depth for any caller that bypasses schema validation. Useful for keeping low-output steps tightly bounded.
+
 ## 0.9.5 - 2026-05-25
 
 - Removed `agent_team` live run/lane counts from Pi's shared footer status row; live progress remains in the `agent_team:live` widget and pushed notices.

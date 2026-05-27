@@ -212,6 +212,7 @@ export class DetachedRun {
 				promptPath,
 				spawnProcess: this.options.spawnProcess ?? spawn,
 				ackTimeoutMs: this.options.rpcCommandAckTimeoutMs,
+				outputLimit: state.spec.outputLimit,
 				onText: (text) => this.updateLiveText(state, text),
 				onEvent: (event) => this.appendEvent({ ...event, stepId: state.spec.id }),
 			});

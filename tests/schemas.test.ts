@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Compile } from "typebox/compile";
 import { AgentTeamSchema } from "../extensions/multiagent/src/schemas.ts";
-import { DEFAULT_MAX_RUN_SECONDS, DEFAULT_NOTIFY_MAX_NOTICES, DEFAULT_NOTIFY_MIN_INTERVAL_SECONDS, DEFAULT_RESULT_PREVIEW_MAX_BYTES, DEFAULT_TERMINAL_RETENTION_SECONDS, DEFAULT_TIMEOUT_SECONDS_PER_STEP, MAX_CLIENT_MESSAGE_ID_CHARS, MAX_MAX_RUN_SECONDS, MAX_PARENT_MESSAGE_CHARS, MAX_PATH_FIELD_CHARS, MAX_RESULT_PREVIEW_BYTES, MAX_RUN_STATUS_WAIT_SECONDS, MAX_STEPS, MAX_TERMINAL_RETENTION_SECONDS, MAX_TEXT_FIELD_CHARS, MAX_TIMEOUT_SECONDS_PER_STEP } from "../extensions/multiagent/src/types.ts";
+import { DEFAULT_MAX_RUN_SECONDS, DEFAULT_NOTIFY_MAX_NOTICES, DEFAULT_NOTIFY_MIN_INTERVAL_SECONDS, DEFAULT_RESULT_PREVIEW_MAX_BYTES, DEFAULT_TERMINAL_RETENTION_SECONDS, DEFAULT_TIMEOUT_SECONDS_PER_STEP, MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP, MAX_CLIENT_MESSAGE_ID_CHARS, MAX_MAX_RUN_SECONDS, MAX_PARENT_MESSAGE_CHARS, MAX_PATH_FIELD_CHARS, MAX_RESULT_PREVIEW_BYTES, MAX_RUN_STATUS_WAIT_SECONDS, MAX_STEP_OUTPUT_BYTES, MAX_STEPS, MAX_TERMINAL_RETENTION_SECONDS, MAX_TEXT_FIELD_CHARS, MAX_TIMEOUT_SECONDS_PER_STEP } from "../extensions/multiagent/src/types.ts";
 
 const validate = Compile(AgentTeamSchema);
 
@@ -73,6 +73,30 @@ test("AgentTeamSchema keeps start graph pure and bounded", () => {
 	assert.equal(validate.Check({ action: "start", graph, options: { notify: { minIntervalSeconds: 0.5 } } }), false);
 	assert.equal(validate.Check({ action: "start", graph: { ...graph, limits: { timeoutSecondsPerStep: 1.5 } } }), false);
 	assert.equal(validate.Check({ action: "run_status", runId: "r1", maxBytes: 1.5 }), false);
+});
+
+test("AgentTeamSchema accepts and clamps per-step outputLimit", () => {
+	const withLimit = (outputLimit: unknown) => ({
+		action: "start",
+		graph: { ...graph, steps: [{ id: "one", agent: { system: "x" }, task: "x", outputLimit }] },
+	});
+	// Valid downward clamps
+	assert.equal(validate.Check(withLimit({ maxBytes: 1024 })), true, "maxBytes within range accepted");
+	assert.equal(validate.Check(withLimit({ maxAssistantFinals: 4 })), true, "maxAssistantFinals within range accepted");
+	assert.equal(validate.Check(withLimit({ maxBytes: 1024, maxAssistantFinals: 4 })), true, "both fields together");
+	assert.equal(validate.Check(withLimit({ maxBytes: MAX_STEP_OUTPUT_BYTES, maxAssistantFinals: MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP })), true, "exact package caps");
+	assert.equal(validate.Check(withLimit({})), true, "empty object accepted (both optional)");
+	// Out-of-range rejected
+	assert.equal(validate.Check(withLimit({ maxBytes: 0 })), false, "maxBytes=0 rejected");
+	assert.equal(validate.Check(withLimit({ maxBytes: -1 })), false, "maxBytes=-1 rejected");
+	assert.equal(validate.Check(withLimit({ maxBytes: MAX_STEP_OUTPUT_BYTES + 1 })), false, "maxBytes above package cap rejected");
+	assert.equal(validate.Check(withLimit({ maxAssistantFinals: 0 })), false, "maxAssistantFinals=0 rejected");
+	assert.equal(validate.Check(withLimit({ maxAssistantFinals: MAX_ASSISTANT_FINAL_MESSAGES_PER_STEP + 1 })), false, "maxAssistantFinals above package cap rejected");
+	// Non-integer rejected (multipleOf:1 guard)
+	assert.equal(validate.Check(withLimit({ maxBytes: 1.5 })), false, "fractional maxBytes rejected");
+	assert.equal(validate.Check(withLimit({ maxAssistantFinals: 1.5 })), false, "fractional maxAssistantFinals rejected");
+	// Unknown field rejected (StrictObjectOptions)
+	assert.equal(validate.Check(withLimit({ unknownField: 1 })), false, "unknown field rejected by additionalProperties:false");
 });
 
 test("AgentTeamSchema bounds run_status and message controls", () => {

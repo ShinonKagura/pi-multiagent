@@ -29,8 +29,10 @@ cleanup     { action, runId }
 Graph step object, used inside `graph.steps[]` only:
 
 ```text
-step { id, agent, task, needs?, after?, cwd? }
+step { id, agent, task, needs?, after?, cwd?, outputLimit? }
 ```
+
+`outputLimit` optionally clamps per-step assistant output downward from the package caps. Shape: `{ maxBytes?, maxAssistantFinals? }`. Both fields are positive integers; raising above the package cap is rejected by schema validation. Useful for keeping low-output steps tightly bounded.
 
 Do not send `{"action":"step"}`. `step` is a graph object, not an `agent_team` action.
 `library` placement differs by action: `catalog` uses top-level `library`; `start` uses `graph.library` or a `library` field inside the graph file. Do not send top-level `library` with `start`.

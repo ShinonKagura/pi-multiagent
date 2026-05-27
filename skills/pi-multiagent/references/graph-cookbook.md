@@ -247,6 +247,40 @@ Web research with explicit catalog-copied provenance:
 }
 ```
 
+## Per-step output limit override
+
+When one step is expected to return a tight, bounded summary and you don't want it to consume the full per-step output budget (4 MiB / 64 assistant finals), clamp its `outputLimit` downward. The package caps still apply as the ceiling; `outputLimit` cannot raise them. Out-of-range and non-integer values are rejected by schema validation; an additional runtime clamp in `AssistantOutputBudget` is defense-in-depth.
+
+```json
+{
+  "action": "start",
+  "graph": {
+    "objective": "Return one tight ranking summary; reject anything verbose.",
+    "authority": {
+      "allowFilesystemRead": true
+    },
+    "steps": [
+      {
+        "id": "rank",
+        "agent": {
+          "ref": "package:scout"
+        },
+        "task": "Return the top 5 most relevant files from src/ for the parent-copied question as a numbered list with one short justification per item. No prose preamble. No final summary section.",
+        "outputLimit": {
+          "maxBytes": 4096,
+          "maxAssistantFinals": 1
+        }
+      }
+    ],
+    "limits": {
+      "timeoutSecondsPerStep": 9000
+    }
+  }
+}
+```
+
+Use it sparingly: most steps should rely on the package defaults. Reach for `outputLimit` only when you want a hard structural guarantee that a step's output stays inside a known small budget (chat-fit summaries, one-line decisions, bounded JSON returns) and want budget-exceeded to fail fast rather than truncate silently.
+
 ## Supervision quick guide
 
 - Let healthy runs finish; pushed notices are compact receipts.

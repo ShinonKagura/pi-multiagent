@@ -232,6 +232,7 @@ Before starting any graph with `bash`, verify the graph authority is limited to 
 | Per-event preview | 2000 chars |
 | Parent message budget per live step | 16 message attempts or 65536 sent message chars |
 | Retained assistant output per step | 4194304 bytes across non-empty assistant finals; max 64 non-empty assistant finals |
+| Per-step `outputLimit` override | Optional graph-step field `outputLimit: { maxBytes?, maxAssistantFinals? }`; clamps the package cap downward only (out-of-range/non-integer values are rejected by schema validation) |
 | RPC JSONL record parse cap | 8 MiB |
 
 ## Troubleshooting quick checks

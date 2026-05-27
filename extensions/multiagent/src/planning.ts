@@ -53,7 +53,7 @@ function resolveStep(step: GraphSpec["steps"][number], index: number, authority:
 	for (const [needIndex, need] of (step.needs ?? []).entries()) validatePublicId(need, `strict dependency ${need || "<empty>"}`, diagnostics, `${path}/needs/${needIndex}`);
 	for (const [afterIndex, after] of (step.after ?? []).entries()) validatePublicId(after, `terminal dependency ${after || "<empty>"}`, diagnostics, `${path}/after/${afterIndex}`);
 	if (!cwd || !agent || !cwdSettingsValid) return undefined;
-	return { id: step.id, agent, task: step.task, needs: dedupeRefs(step.needs ?? []), after: dedupeRefs(step.after ?? []), cwd: cwd.path, cwdIdentity: cwd.identity };
+	return { id: step.id, agent, task: step.task, needs: dedupeRefs(step.needs ?? []), after: dedupeRefs(step.after ?? []), cwd: cwd.path, cwdIdentity: cwd.identity, outputLimit: step.outputLimit };
 }
 
 function resolveStepAgent(stepId: string, spec: GraphSpec["steps"][number]["agent"], authority: GraphAuthority, library: { sources: LibrarySource[] }, libraryAgents: AgentConfig[], diagnostics: AgentDiagnostic[], context: ResolveGraphContext, skillContext: ReturnType<typeof createCallerSkillResolutionContext>, path: string): ResolvedAgent | undefined {
