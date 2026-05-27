@@ -116,6 +116,23 @@ export interface CreatePersistentRunInput {
 export function createPersistentRun(input: CreatePersistentRunInput): PersistentRunHandle | undefined {
 	try {
 		const runDir = runDirFor(input.runId);
+		// I2 (partial) FIX: defense against r1-collision after Pi-restart.
+		// runId is process-local ("r1", "r2", ...). If a previous Pi process crashed
+		// while owning runs/r1/ and we now want to claim runs/r1/ in a fresh process,
+		// detect the existing manifest and refuse to silently overwrite a foreign-pid
+		// run dir. The full fix (proper namespace, e.g. <pid>-r1/) requires upstream
+		// PI2 decision; this defense only prevents the worst silent-clobber case.
+		try {
+			const existing = readManifest(runDir);
+			if (existing && existing.ownerPid !== input.manifest.ownerPid) {
+				// Existing run dir owned by a different pid. Check if that pid is alive;
+				// if alive we definitely must not clobber. If dead (orphan), still refuse:
+				// operator must explicitly cleanup before reusing this runId namespace.
+				return undefined;
+			}
+		} catch {
+			// no existing manifest or unreadable; safe to proceed and create fresh
+		}
 		mkdirSync(runDir, { recursive: true });
 		const lockPath = join(runDir, LOCK_FILE);
 		const lockAcquired = tryAcquireLock(lockPath, input.manifest.ownerPid);

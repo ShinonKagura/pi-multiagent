@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { lstatSync } from "node:fs";
+import { join, relative } from "node:path";
 import { createRunArtifactStore, cleanupRunArtifacts, type RunArtifactStore } from "./background-artifacts.ts";
 import { BackgroundEventStore } from "./background-events.ts";
 import { buildDelegatedTask, writePromptFile } from "./delegated-prompt.ts";
@@ -245,8 +247,25 @@ export class DetachedRun {
 			let effectiveCwd = state.spec.cwd;
 			if (state.spec.isolation === "worktree") {
 				try {
-					state.worktreeState = prepareWorktreeForStep({ invocationCwd: this.options.cwd ?? state.spec.cwd, stepId: state.spec.id, runId: this.id, worktreeSetup: state.spec.worktreeSetup });
-					effectiveCwd = state.worktreeState.worktreePath;
+					const invocationCwd = this.options.cwd ?? state.spec.cwd;
+					state.worktreeState = prepareWorktreeForStep({ invocationCwd, stepId: state.spec.id, runId: this.id, worktreeSetup: state.spec.worktreeSetup });
+					// I3 FIX: if step.cwd points to a subdir inside the invocation cwd (not the invocation cwd itself),
+					// resolve it relative to the worktree root so the child launches in the intended subdir of the worktree,
+					// not in the invocation cwd outside the worktree.
+					if (state.spec.cwd !== invocationCwd) {
+						const stepRelative = relative(invocationCwd, state.spec.cwd);
+						const candidate = join(state.worktreeState.worktreePath, stepRelative);
+						try {
+							const stat = lstatSync(candidate);
+							if (!stat.isDirectory()) throw new Error("not a directory");
+							effectiveCwd = candidate;
+						} catch {
+							this.finishState(state, "failed", `worktree-step-cwd-missing: step.cwd '${state.spec.cwd}' resolved to '${candidate}' inside worktree but does not exist; declare it in worktreeSetup.symlinkPaths if it lives outside the tracked tree`);
+							return;
+						}
+					} else {
+						effectiveCwd = state.worktreeState.worktreePath;
+					}
 					recordWorktreeForStep(this.persistent, { stepId: state.spec.id, worktreePath: state.worktreeState.worktreePath, branchName: state.worktreeState.branchName, baseCommit: state.worktreeState.baseCommit, repoRoot: state.worktreeState.repoRoot });
 					this.appendEvent({ stepId: state.spec.id, type: "step", label: "worktree-prepared", preview: `branch=${state.worktreeState.branchName} base=${state.worktreeState.baseCommit.slice(0, 8)}`, status: "running" });
 				} catch (error) {

@@ -131,6 +131,18 @@ export function teardownWorktreeForStep(input: TeardownWorktreeInput): WorktreeT
 	const { state, artifactStore } = input;
 	let diffStat: string | undefined;
 	let patchPath: string | undefined;
+	// I1 FIX: capture uncommitted edit/write changes by auto-committing them
+	// BEFORE the diff. Otherwise `git diff baseCommit..HEAD` only sees committed
+	// changes and uncommitted child edits are silently lost during worktree removal.
+	try {
+		const status = gitExec(state.repoRoot, ["-C", state.worktreePath, "status", "--porcelain"]).trim();
+		if (status.length > 0) {
+			gitExec(state.repoRoot, ["-C", state.worktreePath, "add", "-A"]);
+			gitExec(state.repoRoot, ["-C", state.worktreePath, "commit", "-m", `step ${state.stepId} output (auto-captured)`, "--no-verify"]);
+		}
+	} catch (error) {
+		warnings.push(`auto-capture of uncommitted changes failed: ${errorMessage(error)}; the diff/patch below may be incomplete`);
+	}
 	try {
 		diffStat = gitExec(state.repoRoot, ["-C", state.worktreePath, "diff", "--stat", `${state.baseCommit}..HEAD`]).trim() || undefined;
 	} catch (error) {
