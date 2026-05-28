@@ -5,6 +5,13 @@
  * Compatible with pi-subagents 0.24.2 / @tintinweb/pi-subagents 0.7.3 / stellar/.pi/agents/.
  */
 export interface PersonaFrontmatter {
+	/**
+	 * Optional explicit schema version of this persona record.
+	 * When omitted, hb-orchestra assumes the v0.5 implicit schema described in
+	 * ARCHITECTURE.md §I3. Future breaking schema changes will bump this value
+	 * and remain back-compat at parse time.
+	 */
+	schemaVersion?: string;
 	/** Agent name; matches the file basename. Case-insensitive lookups allowed. */
 	name: string;
 	/** Optional grouping ("coding", "review", "research", ...). */

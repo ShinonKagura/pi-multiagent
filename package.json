@@ -61,12 +61,12 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/multiagent/index.ts"
+      "./extensions/multiagent/index.ts",
+      "./extensions/orchestra/index.ts"
     ],
     "skills": [
       "./skills"
-    ],
-    "image": "https://unpkg.com/pi-multiagent/assets/pi-multiagent-gallery.webp"
+    ]
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.74.0",
