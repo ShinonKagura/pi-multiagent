@@ -1,8 +1,13 @@
 {
-  "name": "pi-multiagent",
-  "version": "0.10.0",
+  "name": "hb-orchestra",
+  "version": "0.5.0-pre",
   "type": "module",
-  "description": "Adds the agent_team delegation tool and pi-multiagent skill to Pi.",
+  "description": "HeavensByte orchestra — detached multi-agent execution + Agent() compat + persona/profile composition + reproducibility ledger for Pi. Fork of pi-multiagent with extended product scope.",
+  "forkOf": {
+    "package": "pi-multiagent",
+    "version": "0.10.0",
+    "upstream": "https://github.com/Tiziano-AI/pi-multiagent"
+  },
   "keywords": [
     "pi-package",
     "pi",
