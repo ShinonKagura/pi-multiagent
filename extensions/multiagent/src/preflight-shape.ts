@@ -71,12 +71,10 @@ const KNOWN_FIELDS: readonly PreflightField[] = [
 	"extensionTools",
 ];
 
-// Graph body fields recognized for the start "move under graph" repair message.
-// Kept in sync with schemas.ts GraphSchema (objective, library, authority, steps, limits).
-// Historical fields agents/synthesis/outputContract/callerSkills were removed because
-// GraphSchema rejects them under additionalProperties:false, so preflight should not
-// invite users to relocate them there. callerSkills is agent-frontmatter, not graph-body.
-const GRAPH_BODY_FIELDS = new Set<PreflightField>(["objective", "steps", "limits", "authority"]);
+// Current graph body fields eligible for the start "move under graph" repair message.
+// `library` is valid in GraphSchema, but it is intentionally handled by its
+// dedicated top-level catalog/start repair branch below.
+const START_GRAPH_BODY_REPAIR_FIELDS = new Set<PreflightField>(["objective", "steps", "limits", "authority"]);
 
 /** Return fail-closed diagnostics for controls that are invalid for the selected action. */
 export function validatePreflightShape(rawInput: unknown): AgentDiagnostic[] {
@@ -124,7 +122,7 @@ function misplacedFields(input: Record<string, unknown>, allowedFields: readonly
 
 function repairFor(action: ExecutionAction, fields: string[]): string {
 	const fieldSet = new Set(fields);
-	if (action === "start" && fields.some((field) => GRAPH_BODY_FIELDS.has(field as PreflightField))) return 'Move graph body fields under graph: {"action":"start","graph":{"objective":"...","authority":{"allowFilesystemRead":true},"steps":[...]}}. Put start sources in graph.library; top-level library is catalog-only.';
+	if (action === "start" && fields.some((field) => START_GRAPH_BODY_REPAIR_FIELDS.has(field as PreflightField))) return 'Move graph body fields under graph: {"action":"start","graph":{"objective":"...","authority":{"allowFilesystemRead":true},"steps":[...]}}. Put start sources in graph.library; top-level library is catalog-only.';
 	if (fieldSet.has("extensionTools")) return "Place extensionTools under steps[].agent.extensionTools with catalog-copied provenance; agent.tools accepts only built-in child tools.";
 	if (action === "catalog" && fieldSet.has("maxBytes")) return "Remove maxBytes; use library.query to narrow catalog results. maxBytes is valid only on run_status/step_result: it bounds assistant previews when preview:true and raw debug events when debugEvents:true.";
 	if (fieldSet.has("preview")) return "Use preview only on run_status or step_result; it defaults to false and opts into bounded assistant text previews. Use maxBytes there only to bound those previews or run_status debug events.";

@@ -1,49 +1,31 @@
-/** PRE regression: preflight known graph-body fields must remain a subset of GraphSchema. */
+/** PRE regression: preflight current-shape repairs must not preserve legacy contracts. */
 
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
+import { Compile } from "typebox/compile";
 import { validatePreflightShape } from "../extensions/multiagent/src/preflight-shape.ts";
 import { AgentTeamSchema } from "../extensions/multiagent/src/schemas.ts";
 
-test("PRE: outputContract at top-level is silent at preflight (schema rejects)", () => {
-	const diagnostics = validatePreflightShape({
-		action: "start",
-		outputContract: "anything",
-		graph: {
-			objective: "o",
-			steps: [{ id: "a", agent: { system: "s" }, task: "t" }],
-		},
-	});
-	// outputContract was historically misclassified as a graph-body field. The fix removes it
-	// from preflight's KNOWN_FIELDS so preflight is silent and schema's additionalProperties
-	// gives the canonical rejection downstream.
-	const hasOutputContractInMisplaced = diagnostics.some((d) =>
-		d.fields?.includes("outputContract"),
-	);
-	assert.equal(
-		hasOutputContractInMisplaced,
-		false,
-		"outputContract should NOT appear in preflight misplaced fields",
-	);
-});
+const validate = Compile(AgentTeamSchema);
 
-test("PRE: callerSkills (real agent-frontmatter field) not misclassified as graph-body", () => {
+test("PRE: mixed malformed start repair only mentions current graph fields", () => {
 	const diagnostics = validatePreflightShape({
 		action: "start",
-		callerSkills: ["a", "b"],
-		graph: {
-			objective: "o",
-			steps: [{ id: "a", agent: { system: "s" }, task: "t" }],
-		},
+		objective: "x",
+		steps: [{ id: "a", agent: { system: "s" }, task: "t" }],
+		agents: [{ id: "legacy" }],
+		synthesis: { task: "legacy" },
+		outputContract: "legacy",
+		callerSkills: ["legacy"],
 	});
-	const hasCallerSkillsInMisplaced = diagnostics.some((d) =>
-		d.fields?.includes("callerSkills"),
-	);
-	assert.equal(
-		hasCallerSkillsInMisplaced,
-		false,
-		"callerSkills should NOT appear in preflight misplaced fields — it is agent-frontmatter, not graph-body",
-	);
+	const denied = diagnostics.find((d) => d.code === "start-control-fields-denied");
+	assert.ok(denied, "top-level objective/steps should produce start-control-fields-denied");
+	assert.deepEqual(denied.fields, ["objective", "steps"]);
+	assert.ok(denied.repair?.includes("Move graph body fields under graph"));
+	assert.equal(denied.repair?.includes("agents"), false);
+	assert.equal(denied.repair?.includes("synthesis"), false);
+	assert.equal(denied.repair?.includes("outputContract"), false);
+	assert.equal(denied.repair?.includes("callerSkills"), false);
 });
 
 test("PRE: legitimate graph-body misplacement (objective at top) still gets repair", () => {
@@ -77,6 +59,22 @@ test("PRE: extensionTools at top-level still gets the dedicated repair message",
 			d.fields?.includes("extensionTools"),
 	);
 	assert.ok(denied, "extensionTools at top-level should be flagged misplaced");
+	assert.ok(denied.repair?.includes("Place extensionTools under steps[].agent.extensionTools"));
+});
+
+test("PRE: schema rejects legacy fields nested under graph", () => {
+	const invalid = {
+		action: "start",
+		graph: {
+			objective: "o",
+			steps: [{ id: "a", agent: { system: "s" }, task: "t" }],
+			agents: [{ id: "legacy" }],
+			synthesis: { task: "legacy" },
+			outputContract: "legacy",
+			callerSkills: ["legacy"],
+		},
+	};
+	assert.equal(validate.Check(invalid), false);
 });
 
 test("PRE: schema fully rejects unknown graph-body fields even when preflight is silent", () => {
@@ -85,19 +83,8 @@ test("PRE: schema fully rejects unknown graph-body fields even when preflight is
 		steps: [{ id: "a", agent: { system: "s" }, task: "t" }],
 		outputContract: "anything",
 	};
-	// This is the schema-level safety net: even if preflight passes the input through,
-	// GraphSchema's additionalProperties:false rejects unknown keys.
+	// This is the schema-level safety net: GraphSchema's
+	// additionalProperties:false rejects unknown keys without a preflight legacy repair.
 	const wrapped = { action: "start", graph: invalid };
-	const errors = [
-		...((
-			AgentTeamSchema as unknown as {
-				Errors?: (v: unknown) => Iterable<unknown>;
-			}
-		).Errors?.(wrapped) ?? []),
-	];
-	// Some TypeBox versions surface errors via Compile rather than the schema constant;
-	// the absence of Errors() iterator is acceptable as long as compile-time validation rejects.
-	if (errors.length > 0) {
-		assert.ok(true, "schema produces errors as expected");
-	}
+	assert.equal(validate.Check(wrapped), false);
 });
