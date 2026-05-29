@@ -42,14 +42,17 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
     - [x] `examples` — `worktree-isolated-mutation.json` is treated as the one deliberate copy/adapt
       mutation TEMPLATE: exempt from the no-mutation rule (with an isolation-safety assertion) and
       from the runnable-resolve coverage (its placeholder mutationScope is denied until replaced). 5/5.
-    - [ ] **Only remaining: `worktree-isolation-persistence-interlock`** — its "running"
-      (non-worktree) sub-tests construct a `DetachedRun` with no fake `spawnProcess`, so the run loop
-      spawns REAL child processes and the suite never exits. Proper fix = give it the RPC fake-spawn
-      harness (currently a private ~150-line helper in `delegation.test.ts`); extract/share it. Until
-      then it stays excluded from CI via the per-test timeout + name exclusion.
-  - **Suite status: 44/45 test files green** under node+loader; the one excluded file is the
-    quarantined hang above. CI gate 3 (inherited substrate, minus that file) is now a **required**
-    green gate, not informational.
+    - [ ] **Remaining (real-pi-launcher coupling):** `worktree-isolation-persistence-interlock` (its
+      non-worktree sub-tests build a `DetachedRun` with no fake `spawnProcess` → spawns REAL children
+      → suite never exits) and `rpc-child-controller-unref` (spawns a real pi launcher; fails on a
+      clean CI runner with "Unable to resolve a trusted absolute pi launcher"). These pass LOCALLY
+      (pi on PATH) but not on a clean runner. Proper fix = a shared RPC fake-spawn/launcher harness
+      (currently a private ~150-line helper in `delegation.test.ts`); extract/share it, then these can
+      join the required gate. There may be other real-spawn tests with the same coupling.
+  - **Suite status: 44/45 green LOCALLY** (pi on PATH). On a clean CI runner the real-pi-launcher
+    tests above fail, so CI gate 3 (inherited substrate) stays **informational** (`continue-on-error`)
+    for now; the **required** gates are typecheck + the hb-orchestra layer (both env-independent and
+    green). Tightening gate 3 to required needs the fake-launcher harness or pi installed on CI.
   - [ ] Document the canonical test command(s) in the README once the substrate suite is green.
 - **D2 [BLOCKER]** CI pipeline. _Done (first iteration) 2026-05-29:_ `.github/workflows/ci.yml` runs
   on push/PR to `hb-orchestra-v0.5`/`main`: `pnpm install --no-frozen-lockfile` (repo gitignores
