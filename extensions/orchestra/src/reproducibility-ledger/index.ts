@@ -7,3 +7,5 @@
 export type { ComposedRunInputs, ReplayManifest, RunHashStepInput } from "./types.ts";
 export { canonicalJson, composedInputsFromGraph, computeRunHash, RUN_HASH_VERSION } from "./run-hash.ts";
 export { buildReplayManifest } from "./replay-manifest.ts";
+export type { ReplayLoadResult, ReplayWriteResult } from "./ledger-store.ts";
+export { loadReplayManifest, resolveReplayLedgerDir, writeReplayManifest } from "./ledger-store.ts";

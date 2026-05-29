@@ -15,6 +15,8 @@
  *     ARCHITECTURE I6 — reads `.pi/harness/` or `.agents/harness/`, never writes).
  *   - run_hash on each `Agent`/`Profile` start: a deterministic reproducibility fingerprint over the
  *     composed inputs, emitted as a `hb-orchestra:run-hash` event and appended to the start result (Layer 5).
+ *   - `Replay` tool + `/replay <run_hash|runId>`: re-execute a prior run from the persisted replay
+ *     ledger (keyed by stable run_hash); the replay's run_hash matches the original (Layer 5).
  *
  * Both resolve a `.pi/agents/<name>.md` persona via Layer 1, map it to a single
  * inline-step detached graph via the Layer 6 pure mapper, and start it through
@@ -43,7 +45,7 @@ import { agentInvocationToDetachedGraphStart, type AgentInvocation } from "./src
 import { profileToDetachedGraphStart } from "./src/execution-runtime/index.ts";
 import { findHarnessContract, summarizeHarnessContract } from "./src/harness-contracts/index.ts";
 import { findProfile, resolveProfile } from "./src/profile-engine/index.ts";
-import { composedInputsFromGraph, computeRunHash } from "./src/reproducibility-ledger/index.ts";
+import { buildReplayManifest, composedInputsFromGraph, computeRunHash, loadReplayManifest, writeReplayManifest } from "./src/reproducibility-ledger/index.ts";
 
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const packageAgentsDir = join(packageRoot, "agents");
@@ -100,6 +102,13 @@ const SteerSubagentSchema = Type.Object({
 });
 
 type SteerSubagentParams = Static<typeof SteerSubagentSchema>;
+
+const ReplayToolSchema = Type.Object({
+	runId: Type.String({ description: "The run_hash (preferred, stable across processes) or a recent runId of a prior run to re-execute. The run_hash is in a run's start result (run_hash=...).", minLength: 2 }),
+	waitSeconds: Type.Optional(Type.Number({ description: "Foreground wait (1-600, bounded) for the replayed run; omit for detached (returns a runId).", minimum: 1, maximum: 600, multipleOf: 1 })),
+});
+
+type ReplayToolParams = Static<typeof ReplayToolSchema>;
 
 /** Resolve which step a steer message targets. Pure so it is unit-testable. */
 export function resolveSteerStepId(liveStepIds: string[], providedStepId: string | undefined): { stepId?: string; error?: { code: string; message: string } } {
@@ -221,6 +230,34 @@ export default function orchestraExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify(summarizeHarnessContract(lookup), hasError ? "error" : "info");
 		},
 	});
+
+	pi.registerTool({
+		name: "Replay",
+		label: "Replay",
+		description: [
+			"Re-execute a previous hb-orchestra run by its run_hash (preferred, stable) or a recent runId, from the persisted reproducibility ledger (ARCHITECTURE I5).",
+			"Loads the stored replay manifest and re-launches the identical detached graph; the new run's run_hash matches the original. Inspect via agent_team / get_subagent_result.",
+		].join(" "),
+		promptSnippet: "Re-run a prior run by run_hash via the reproducibility ledger.",
+		parameters: ReplayToolSchema,
+		async execute(_toolCallId, params: ReplayToolParams, signal, onUpdate, ctx) {
+			return startReplay(pi, ctx, params.runId, signal, onUpdate, params.waitSeconds);
+		},
+	});
+
+	pi.registerCommand("replay", {
+		description: "Re-run a previous run by run_hash (or recent runId): /replay <run_hash|runId>",
+		handler: async (args, ctx) => {
+			const id = args.trim();
+			if (!id) {
+				ctx.ui.notify("Usage: /replay <run_hash|runId>", "warning");
+				return;
+			}
+			const result = await startReplay(pi, ctx, id, ctx.signal, undefined);
+			const ok = result.details?.ok !== false;
+			ctx.ui.notify(resultText(result), ok ? "info" : "error");
+		},
+	});
 }
 
 function toProfileInvocation(params: ProfileToolParams): ProfileInvocation {
@@ -327,6 +364,11 @@ async function startRunMaybeWait(options: AgentTeamRuntimeOptions, graph: GraphS
 		} catch {
 			/* best-effort: reproducibility fingerprint is observability, never load-bearing */
 		}
+		try {
+			writeReplayManifest(buildReplayManifest({ graph, runHash, createdAt: new Date().toISOString() }), runId);
+		} catch {
+			/* best-effort: the replay ledger is observability, never load-bearing */
+		}
 	}
 	const cap = clampForegroundWaitSeconds(waitSeconds);
 	if (cap === undefined || !runId || started.details?.run?.terminal === true) return appendRunHashNote(started, runHash);
@@ -343,6 +385,16 @@ async function startRunMaybeWait(options: AgentTeamRuntimeOptions, graph: GraphS
 
 export function appendRunHashNote(result: AgentToolResult<AgentTeamDetails>, runHash: string): AgentToolResult<AgentTeamDetails> {
 	return { ...result, content: [...(result.content ?? []), { type: "text" as const, text: `[hb-orchestra] run_hash=${runHash}` }] };
+}
+
+/** Re-execute a prior run from the persisted replay ledger by run_hash (preferred) or recent runId. */
+async function startReplay(pi: ExtensionAPI, ctx: ExtensionContext, idOrHash: string, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined, waitSeconds?: number): Promise<AgentToolResult<AgentTeamDetails>> {
+	const options = buildRuntimeOptions(pi, ctx, signal, onUpdate);
+	const loaded = loadReplayManifest(idOrHash);
+	if (!loaded.manifest) {
+		return errorResult(options, "replay-not-found", `Replay manifest not found for ${JSON.stringify(idOrHash)}.${loaded.diagnostic ? ` ${loaded.diagnostic}` : ""}`);
+	}
+	return startRunMaybeWait(options, loaded.manifest.graph, waitSeconds);
 }
 
 function buildRuntimeOptions(pi: ExtensionAPI, ctx: ExtensionContext, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): AgentTeamRuntimeOptions {
