@@ -1,0 +1,10 @@
+allowBuilds:
+  '@google/genai': set this to true or false
+  koffi: set this to true or false
+  protobufjs: set this to true or false
+# pnpm 11 moved dependency build-script config here and defaults strictDepBuilds=true (a hard
+# install failure when a dependency has an unapproved build script). CI only typechecks and runs the
+# JS test suite via the node loader — it needs none of the native/build outputs of transitive deps
+# (@google/genai, koffi, protobufjs). Demote the ignored builds back to a warning so install succeeds
+# without running arbitrary dependency build scripts on the runner.
+strictDepBuilds: false
