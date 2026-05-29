@@ -101,5 +101,5 @@ Known environmental caveats (pre-existing, not hb-orchestra regressions):
 ## Gate state
 
 - Architecture gate (ARCHITECTURE §7): **closed** — Mark approved I1–I8 (2026-05-28); GPT-5.5 review captured in the Stellar hb-orchestra documentation audit. Optional external second-opinion is not a blocker.
-- Roadmap gate 7.7 (Real-Pi smoke across 20+ Stellar personas via `Agent()` + `/agent`): **partial** — automated headless probe is green for Load + `/agent`/`Agent` start + `run_status` inspection after FIX-1/FIX-2/OPEN-1 (package persona `reviewer`); the formal cross-persona **interactive operator TTY run** (project-agent confirmation + 20+ personas) is still required before 7.8.
+- Roadmap gate 7.7 (Real-Pi smoke across 20+ Stellar personas via `Agent()` + `/agent`): **L6-minimal PASS (interactive)** — operator TTY run proved Load + `/agent` + `Agent` tool (incl. tools-override) + project-agent confirm + `run_status`/wait + child `succeeded` with a real review artifact (`coding_reviewer` on `phase8_receipt_verifier.rs`). See `docs/7.7-real-pi-smoke-receipt.md`. Remaining (optional breadth): repeat across the other 20+ personas before 7.8.
 - Roadmap gate 7.8 (remove `pi-subagents` + `taskplane`): **blocked** until 7.7 is fully green and a backup exists.
