@@ -40,6 +40,17 @@ test("graph examples keep tool grants explicit and minimal", async () => {
 	const files = (await readdir(examplesDir)).filter((file) => file.endsWith(".json")).sort();
 	for (const file of files) {
 		const graph = await readGraphExample(file);
+		if (file === "worktree-isolated-mutation.json") {
+			// The one deliberately mutation-capable example demonstrates the v0.10 worktree-isolation
+			// feature. It is exempt from the no-mutation rules below, but must keep that mutation
+			// strictly isolated: worktree authority + a worktree-isolated worker step with a mutationScope.
+			assert.equal(isRecord(graph.authority) && graph.authority.allowMutationWorktree === true, true, `${file} must set allowMutationWorktree for isolated mutation`);
+			const mutateStep = graphSteps(graph).find((step) => isRecord(step.agent) && step.agent.ref === "package:worker");
+			assert.equal(Boolean(mutateStep), true, `${file} should route its mutation through package:worker`);
+			assert.equal(isRecord(mutateStep) && mutateStep.isolation === "worktree", true, `${file} mutation step must use isolation:'worktree'`);
+			assert.equal(isRecord(mutateStep) && typeof mutateStep.mutationScope === "string" && mutateStep.mutationScope.length > 0, true, `${file} mutation step must declare a mutationScope`);
+			continue;
+		}
 		assert.equal(isRecord(graph.authority) && graph.authority.allowMutationTools === true, false, `${file} should not be a mutation-capable packaged example`);
 		for (const step of graphSteps(graph)) {
 			const ref = isRecord(step.agent) && typeof step.agent.ref === "string" ? step.agent.ref : undefined;
@@ -55,6 +66,10 @@ test("graph examples keep tool grants explicit and minimal", async () => {
 
 test("packaged graph examples resolve against bundled catalog with expected sinks", async () => {
 	const discovery = discoverAgents({ cwd: process.cwd(), packageAgentsDir: join(process.cwd(), "agents"), library: normalizeLibraryOptions({ sources: ["package"] }) });
+	// worktree-isolated-mutation.json is a copy/adapt TEMPLATE: its placeholder mutationScope is
+	// intentionally denied at planning until replaced, so it cannot "resolve cleanly" as shipped. Its
+	// structure + isolation safety are covered by the "tool grants explicit and minimal" test above,
+	// so it is excluded from this runnable-resolve coverage check.
 	const expectedSinks = new Map([
 		["artifact-chained-decision.json", ["final-decision"]],
 		["command-validation-only.json", ["final-proof"]],
@@ -74,7 +89,7 @@ test("packaged graph examples resolve against bundled catalog with expected sink
 		["tree-reduce-source-review.json", ["final-decision"]],
 		["validation-matrix-gate.json", ["final-proof"]],
 	]);
-	const files = (await readdir(examplesDir)).filter((file) => file.endsWith(".json")).sort();
+	const files = (await readdir(examplesDir)).filter((file) => file.endsWith(".json") && file !== "worktree-isolated-mutation.json").sort();
 	assert.deepEqual(files, [...expectedSinks.keys()].sort(), "expected sink map must cover every packaged graph example exactly");
 	for (const [file, sinks] of expectedSinks) {
 		const graph = await readGraphExample(file);

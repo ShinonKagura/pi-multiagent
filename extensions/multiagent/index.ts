@@ -13,7 +13,7 @@ import { sweepRunsRoot, type PersistedWorktreeRecord } from "./src/persistent-ru
 import { ScheduledRunRegistry } from "./src/scheduled-runs.ts";
 import { prepareLibraryOptions } from "./src/library-policy.ts";
 import { validatePreflightShape } from "./src/planning.ts";
-import { AgentTeamLiveRunsWidget, formatAgentTeamLiveStatus, formatAgentTeamNoticeText, renderAgentTeamCall, renderAgentTeamNoticeMessage, renderAgentTeamResult } from "./src/rendering.ts";
+import { AgentTeamLiveRunsWidget, formatAgentTeamNoticeText, renderAgentTeamCall, renderAgentTeamNoticeMessage, renderAgentTeamResult } from "./src/rendering.ts";
 import { describeOutputLimit } from "./src/result-format.ts";
 import { AgentTeamSchema, type AgentTeamInput } from "./src/schemas.ts";
 import { readSubagentSkillConfig, SUBAGENT_SKILLS_FLAG } from "./src/subagent-skills-config.ts";
@@ -256,7 +256,6 @@ function reconcileRunWidget(ctx: ExtensionContext, sessionId: string, liveRunUiB
 function setRunWidget(ctx: ExtensionContext, state: LiveRunUiState, liveRuns: AgentTeamDetails[], reinstall: boolean): void {
 	if (state.component && !reinstall) {
 		state.component.setDetails(liveRuns);
-		ctx.ui.setStatus("agent_team", formatAgentTeamLiveStatus(liveRuns));
 		return;
 	}
 	ctx.ui.setWidget("agent_team:live", (tui, theme) => {
@@ -264,14 +263,12 @@ function setRunWidget(ctx: ExtensionContext, state: LiveRunUiState, liveRuns: Ag
 		state.component = component;
 		return component;
 	});
-	ctx.ui.setStatus("agent_team", formatAgentTeamLiveStatus(liveRuns));
 }
 
 function clearRunWidget(ctx: ExtensionContext, sessionId: string, liveRunUiBySession: Map<string, LiveRunUiState>): void {
 	liveRunUiBySession.delete(sessionId);
 	if (!ctx.hasUI) return;
 	ctx.ui.setWidget("agent_team:live", undefined);
-	ctx.ui.setStatus("agent_team", undefined);
 }
 
 function sendNoticeMessage(pi: ExtensionAPI, ctx: ExtensionContext, sessionId: string, closedUiSessions: Set<string>, details: AgentTeamDetails): string | undefined {
