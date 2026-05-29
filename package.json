@@ -29,7 +29,8 @@
     "node": ">=20.6.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": []
+    "onlyBuiltDependencies": [],
+    "ignoredBuiltDependencies": ["@google/genai", "koffi", "protobufjs"]
   },
   "publishConfig": {
     "access": "public"
