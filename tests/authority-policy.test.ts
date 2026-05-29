@@ -8,6 +8,8 @@ const falseAuthority: GraphAuthority = {
 	allowShellTools: false,
 	allowMutationTools: false,
 	allowExtensionCode: false,
+	allowProjectCode: false,
+	allowMutationWorktree: false,
 };
 
 const trueAuthority: GraphAuthority = {
@@ -15,10 +17,12 @@ const trueAuthority: GraphAuthority = {
 	allowShellTools: true,
 	allowMutationTools: true,
 	allowExtensionCode: true,
+	allowProjectCode: true,
+	allowMutationWorktree: true,
 };
 
 test("authority matrix covers the graph authority contract exactly", () => {
-	const expected: (keyof GraphAuthority)[] = ["allowFilesystemRead", "allowShellTools", "allowMutationTools", "allowExtensionCode"];
+	const expected: (keyof GraphAuthority)[] = ["allowFilesystemRead", "allowShellTools", "allowMutationTools", "allowExtensionCode", "allowProjectCode", "allowMutationWorktree"];
 	assert.deepEqual([...GRAPH_AUTHORITY_KEYS].sort(), expected.sort());
 	assert.deepEqual(normalizeAuthority(undefined), falseAuthority);
 	assert.deepEqual(normalizeAuthority({ allowFilesystemRead: true }), { ...falseAuthority, allowFilesystemRead: true });

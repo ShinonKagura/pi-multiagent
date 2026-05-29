@@ -19,10 +19,10 @@ test("start copy makes waiting the default and shows effective tools", () => {
 	const step: StepSnapshot = { id: "one", status: "running", agentRef: "inline:one", model: "parent/model", thinking: "medium", effectiveTools: ["read", "grep", "find", "ls", "bash", "exa_search"], extensionTools: ["exa_search"], callerSkills: ["pi-multiagent"], needs: [], after: [], startedAt: "now", endedAt: undefined, lastActivity: "tool bash running", errorMessage: undefined };
 	const start = formatDetailsForModel(details("start", { run: runSnapshot({ liveStepIds: ["one"], counts: { pending: 0, running: 1, succeeded: 0, failed: 0, blocked: 0, timed_out: 0, canceled: 0 }, canMessage: true, canCancel: true }), steps: [step] }));
 	assert.match(start, /keep the short runId/);
-	assert.match(start, /Healthy run: wait for pushed notices/);
-	assert.match(start, /JSON\/API\/headless or no notices: run_status \{runId, waitSeconds\}/);
-	assert.match(start, /Compact inspect: run_status without preview/);
-	assert.match(start, /step_result \{runId, stepId, preview:true\}/);
+	assert.match(start, /No action is needed while work is healthy; wait for pushed notices/);
+	assert.match(start, /run_status only for manual compact inspection or waitSeconds/);
+	assert.match(start, /Preserve artifact paths before cleanup/);
+	assert.match(start, /step_result \{runId, stepId\} for one step/);
 	assert.match(start, /cleanup deletes retained evidence/);
 	assert.match(start, /## Effective step tools/);
 	assert.match(start, /model=parent\/model/);
@@ -74,11 +74,11 @@ test("run_status step rows include model lane, compact last activity, cursor sem
 	assert.match(run_status, /thinking=high/);
 	assert.match(run_status, /effectiveTools=read,grep,find,ls,bash/);
 	assert.match(run_status, /lastActivity="tool bash running"/);
-	assert.match(run_status, /\nCursor: 0 \(pass as run_status\.cursor for later wait\/debug reads\)/);
+	assert.match(run_status, /\nCursor: 0/);
 	assert.doesNotMatch(run_status, /stepId filters wait\/debug events only/);
 	assert.doesNotMatch(run_status, /Debug cursor: 0/);
 	const withStepPreviewDiagnostic = formatDetailsForModel(details("run_status", { diagnostics: [{ code: "run-status-step-preview-ignored", message: "run_status stepId filters wait/debug events only; use step_result with this stepId for a step text preview.", path: "/stepId", severity: "warning" }] }));
-	assert.match(withStepPreviewDiagnostic, /Hint: run_status stepId filters wait\/debug events only/);
+	assert.match(withStepPreviewDiagnostic, /run-status-step-preview-ignored: run_status stepId filters wait\/debug events only/);
 	const withoutCursor = formatDetailsForModel(details("run_status", { cursor: undefined }));
 	assert.match(withoutCursor, /Cursor: none returned/);
 });
@@ -112,7 +112,7 @@ test("cleanup context keeps trust notice before run-derived status and success r
 	assert.match(denied, /Error: cleanup-run-live/);
 	const success = formatDetailsForModel(details("cleanup", { cleanup: { runId: "r1", deletedPaths: ["/tmp/a"] } }));
 	assert.match(success, /Cleanup deleted retained run evidence/);
-	assert.match(success, /may no longer be readable by run_status or step_result/);
+	assert.match(success, /may no longer be readable/);
 	assert.match(success, /use cleanup only after evidence was preserved or intentionally discarded/);
 	assert.doesNotMatch(success, /Use step_result or artifact paths for full text/);
 	assert.doesNotMatch(success, /canCleanup/);
@@ -156,7 +156,9 @@ test("catalog extension tools render copy-ready graph grants", () => {
 
 	const projectCatalog = formatDetailsForModel(details("catalog", { extensionTools: [{ name: "project_search", description: "search project", active: true, from: { source: "project:search", scope: "project", origin: "top-level" } }] }));
 	assert.match(projectCatalog, /graph\.authority\.allowExtensionCode:true/);
-	assert.doesNotMatch(projectCatalog, /allowProject/);
+	// A project-scoped extension tool legitimately requires project-code authority, so the catalog
+	// surfaces allowProjectCode here (the user-scoped catalog above must not).
+	assert.match(projectCatalog, /graph\.authority\.allowProjectCode:true/);
 });
 
 test("catalog rows with adversarial metadata keep disclaimer first", () => {
