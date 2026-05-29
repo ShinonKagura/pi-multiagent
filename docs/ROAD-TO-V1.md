@@ -25,15 +25,25 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
     loader now resolves each peer specifier via Node resolution from the fork root first (pnpm/CI),
     then the legacy nested path (flat global). Result: **node+loader suite 25/45 → 38/45 green**, and
     all 12 `orchestra-*` files pass.
-  - [ ] **Pay down inherited multiagent test debt** — 7 files still red under node+loader, all
-    pre-existing substrate issues (NOT the orchestra layer):
-    - stale expectations (mechanical): `authority-policy` (expects 4 authority keys; source has 6 —
-      `allowProjectCode`, `allowMutationWorktree`), `result-format` (healthy-run wording drifted).
-    - need a design decision (do not guess): `rendering` (source uses `ctx.ui.setStatus`; test
+  - **Pay down inherited multiagent test debt** — was 7 files red; all pre-existing substrate issues
+    (NOT the orchestra layer). _Progress 2026-05-29:_
+    - [x] `authority-policy` — refreshed: `GRAPH_AUTHORITY_KEYS` + fixtures now include the two real
+      keys the source ships (`allowProjectCode`, `allowMutationWorktree`). 3/3.
+    - [x] `result-format` — refreshed: `Next:`/cleanup/cursor/diagnostic wording aligned to current
+      model-facing strings; project-catalog assertion flipped to a positive `allowProjectCode` check.
+      23/23.
+    - [ ] `delegation` + `planning` — NOT stale wording: they encode the **pre-v0.10 capability
+      contract** (a `package:validator` without shell or `package:worker` without write was hard
+      rejected via `validator-shell-capability-required` / `worker-mutation-capability-required`,
+      steps=0). The substrate **deliberately redesigned** this: library default tools are now CAPPED
+      to the granted authority with a `catalog-default-tools-capped` warning (the step still runs),
+      and mutating steps require an explicit `mutationScope` (`mutation-scope-required`). Making these
+      green = carefully rewriting each sub-scenario to the new model (real work on inherited code, low
+      marginal value for the orchestra layer). Quarantined meanwhile.
+    - [ ] need a design decision (do not guess): `rendering` (source uses `ctx.ui.setStatus`; test
       forbids the shared footer row), `examples` (`worktree-isolated-mutation.json` is
       mutation-capable but the test asserts no packaged example may be).
-    - inspect: `delegation`, `planning` (assertion drift — stale vs behavioral TBD).
-    - slow/hang: `worktree-isolation-persistence-interlock` (quarantined from CI via per-test
+    - [ ] slow/hang: `worktree-isolation-persistence-interlock` (quarantined from CI via per-test
       timeout + exclusion).
   - [ ] Document the canonical test command(s) in the README once the substrate suite is green.
 - **D2 [BLOCKER]** CI pipeline. _Done (first iteration) 2026-05-29:_ `.github/workflows/ci.yml` runs
