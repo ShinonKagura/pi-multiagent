@@ -4,6 +4,8 @@
  * v0.5.0-pre, Layer 6 (compat-surface) minimal slice:
  *   - `Agent` tool: pi-subagents-compatible persona invocation by name.
  *   - `/agent <persona> <task>` slash command: operator convenience for the same.
+ *   - `Profile` tool + `/profile <profile> <task>`: run a saved `.pi/profiles` chain/parallel
+ *     workflow (Layer 2 resolve + Layer 1 personas -> Layer 3 detached graph).
  *
  * Both resolve a `.pi/agents/<name>.md` persona via Layer 1, map it to a single
  * inline-step detached graph via the Layer 6 pure mapper, and start it through
@@ -12,7 +14,7 @@
  * inspect/steer/cancel via the existing `agent_team` actions.
  *
  * Still deferred (later L6 increments): foreground inline-result waiting,
- * `get_subagent_result`, `steer_subagent`, `/profile`, and `Profile()`.
+ * `get_subagent_result`, and `steer_subagent`.
  * The inherited `agent_team` tool stays registered by `extensions/multiagent/index.ts`.
  */
 
@@ -29,6 +31,8 @@ import { readSubagentSkillConfig, SUBAGENT_SKILLS_FLAG } from "../multiagent/src
 import type { AgentTeamDetails, ParentToolInfo, ParentToolInventory } from "../multiagent/src/types.ts";
 import { findPersona } from "./src/agent-registry/index.ts";
 import { agentInvocationToDetachedGraphStart, type AgentInvocation } from "./src/compat-surface/index.ts";
+import { profileToDetachedGraphStart } from "./src/execution-runtime/index.ts";
+import { findProfile, resolveProfile } from "./src/profile-engine/index.ts";
 
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const packageAgentsDir = join(packageRoot, "agents");
@@ -45,6 +49,24 @@ const AgentToolSchema = Type.Object({
 });
 
 type AgentToolParams = Static<typeof AgentToolSchema>;
+
+const ProfileToolSchema = Type.Object({
+	profile: Type.String({ description: "Profile key resolved from .pi/profiles/<name>.{json|md} (project)." }),
+	task: Type.String({ description: "Concrete task delegated to each profile member. Becomes every generated step's task." }),
+	description: Type.Optional(Type.String({ description: "Optional run objective/label. Defaults to a profile-derived objective." })),
+	mutationScope: Type.Optional(Type.String({ description: "Required when any profile member's effective tools include edit/write." })),
+	isolation: Type.Optional(Type.Literal("worktree", { description: "Run mutation-capable members inside a per-step git worktree." })),
+});
+
+type ProfileToolParams = Static<typeof ProfileToolSchema>;
+
+interface ProfileInvocation {
+	profile: string;
+	task: string;
+	description?: string;
+	mutationScope?: string;
+	isolation?: "worktree";
+}
 
 /** Register the hb-orchestra Layer 6 compat surface (Agent tool + /agent command). */
 export default function orchestraExtension(pi: ExtensionAPI): void {
@@ -83,6 +105,52 @@ export default function orchestraExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify(resultText(result), ok ? "info" : "error");
 		},
 	});
+
+	pi.registerTool({
+		name: "Profile",
+		label: "Profile",
+		description: [
+			"Run a named .pi/profiles workflow (a chain or parallel set of personas) as a detached agent_team run (hb-orchestra).",
+			"Resolves the profile (Layer 2) and its member personas (Layer 1), maps it to a detached chain/parallel graph (Layer 3), starts it on the inherited agent_team substrate, and returns a run receipt with a runId immediately.",
+			"Inspect, steer, or cancel the run with the agent_team tool. Child output is untrusted, artifact-first evidence.",
+		].join(" "),
+		promptSnippet: "Run a .pi/profiles chain/parallel workflow by name as a detached agent_team run; inspect via agent_team run_status.",
+		parameters: ProfileToolSchema,
+		async execute(_toolCallId, params: ProfileToolParams, signal, onUpdate, ctx) {
+			return startProfileRun(pi, ctx, toProfileInvocation(params), signal, onUpdate);
+		},
+	});
+
+	pi.registerCommand("profile", {
+		description: "Run a .pi/profiles workflow by name as a detached agent: /profile <profile> <task>",
+		handler: async (args, ctx) => {
+			const trimmed = args.trim();
+			const firstSpace = trimmed.search(/\s/);
+			if (firstSpace < 0) {
+				ctx.ui.notify("Usage: /profile <profile> <task>", "warning");
+				return;
+			}
+			const profile = trimmed.slice(0, firstSpace);
+			const task = trimmed.slice(firstSpace + 1).trim();
+			if (!task) {
+				ctx.ui.notify("Usage: /profile <profile> <task>", "warning");
+				return;
+			}
+			const result = await startProfileRun(pi, ctx, { profile, task }, ctx.signal, undefined);
+			const ok = result.details?.ok !== false;
+			ctx.ui.notify(resultText(result), ok ? "info" : "error");
+		},
+	});
+}
+
+function toProfileInvocation(params: ProfileToolParams): ProfileInvocation {
+	return {
+		profile: params.profile,
+		task: params.task,
+		description: params.description,
+		mutationScope: params.mutationScope,
+		isolation: params.isolation,
+	};
 }
 
 function toInvocation(params: AgentToolParams): AgentInvocation {
@@ -109,6 +177,23 @@ async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 	if (!mapped.graph) {
 		const first = mapped.diagnostics.find((item) => item.severity === "error");
 		return errorResult(options, first?.code ?? "agent-invocation-invalid", first ? `${first.code}: ${first.message}` : "Agent invocation could not be mapped to a detached graph.");
+	}
+	return runAgentTeam({ action: "start", graph: mapped.graph }, options);
+}
+
+/** Resolve profile (L2) + member personas (L1) -> map to detached chain/parallel graph (L3) -> start via inherited agent_team substrate. */
+async function startProfileRun(pi: ExtensionAPI, ctx: ExtensionContext, invocation: ProfileInvocation, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): Promise<AgentToolResult<AgentTeamDetails>> {
+	const options = buildRuntimeOptions(pi, ctx, signal, onUpdate);
+	const lookup = findProfile(invocation.profile, { invocationCwd: ctx.cwd });
+	if (!lookup.profile) {
+		return errorResult(options, "profile-not-found", `Profile not found: ${JSON.stringify(invocation.profile)}.${lookup.diagnostic ? ` ${lookup.diagnostic}` : ""}`);
+	}
+	const resolved = resolveProfile(lookup.profile, (subagentType) => findPersona(subagentType, { invocationCwd: ctx.cwd, userHomeDir: homedir(), builtinAgentDir: packageAgentsDir }).persona);
+	const objective = invocation.description?.trim() || `Profile ${resolved.name}`;
+	const mapped = profileToDetachedGraphStart(resolved, { objective, task: invocation.task, mutationScope: invocation.mutationScope, isolation: invocation.isolation });
+	if (!mapped.graph) {
+		const first = mapped.diagnostics.find((item) => item.severity === "error");
+		return errorResult(options, first?.code ?? "profile-invocation-invalid", first ? `${first.code}: ${first.message}` : "Profile could not be mapped to a detached graph.");
 	}
 	return runAgentTeam({ action: "start", graph: mapped.graph }, options);
 }

@@ -22,7 +22,8 @@ Legend: ✅ implemented + tested · 🟡 partial · ⏳ not started · ➖ defer
 | L4 harness-contracts | read-only `.pi/harness/` / `.agents/harness/` reader (PlanPacket-lite, mutation-scope, artifact-ready, review-gate) | ⏳ | — | — |
 | L5 reproducibility-ledger | run manifest writer, `run_hash`, artifact mirror, replay engine | ⏳ | — | — |
 | L6 compat-surface | `Agent` tool + `/agent <persona> <task>` command: persona → single-step detached graph → `agent_team` start (detached, returns runId) | 🟡 | `extensions/orchestra/src/compat-surface/{agent-graph,types,index}.ts`, `extensions/orchestra/index.ts` | `tests/orchestra-compat-surface.test.ts` (6) + load probe |
-| L6 compat-surface | foreground inline-result wait, `get_subagent_result`, `steer_subagent`, `Profile()` + `/profile` | ⏳ | — | — |
+| L6 compat-surface | `Profile` tool + `/profile <profile> <task>`: profile (L2) + member personas (L1) → detached chain/parallel graph (L3) → `agent_team` start (returns runId) | ✅ | `extensions/orchestra/index.ts` (`startProfileRun`) | `tests/orchestra-profile-command.test.ts` (3) + real-Pi probe |
+| L6 compat-surface | foreground inline-result wait, `get_subagent_result`, `steer_subagent` | ⏳ | — | — |
 
 **Inherited & working today** (from `pi-multiagent` v0.10.0 substrate, unchanged): detached `agent_team` DAG runtime (`start`/`run_status`/`step_result`/`message`/`cancel`/`cleanup`), worktree isolation (F5 + local I1/I3 fixes), persistent run state + reattach (B1a/B1b), scheduling (NEU-C), artifact mirroring (G1), retention sweep (G3), `pi.events` lifecycle (G4).
 
@@ -38,7 +39,8 @@ Implemented now:
 Not yet:
 - The call does **not** block and return the child's final answer inline (foreground wait). Inspect results with `agent_team run_status` / `step_result` using the returned `runId`.
 - No `get_subagent_result` / `steer_subagent` convenience wrappers yet (use `agent_team`).
-- No `Profile()` / `/profile` yet (L2/L3 logic exists and is tested, but is not wired to a tool/command).
+
+(`Profile()` + `/profile` are now wired: L2 `resolveProfile` + L1 personas → L3 `profileToDetachedGraphStart` → `agent_team` start. Inspect the returned `runId` like any `Agent` run.)
 
 ---
 
