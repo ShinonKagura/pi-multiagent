@@ -24,10 +24,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
-          cache: pnpm
 
+      # The repo intentionally gitignores lockfiles (.gitignore), so there is no committed
+      # pnpm-lock.yaml to cache against or freeze — install fresh within the package.json ranges.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       # Required gate 1: the whole repo typechecks (0 errors).
       - name: Typecheck
