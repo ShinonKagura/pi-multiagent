@@ -25,6 +25,7 @@ import { normalizeLibraryOptions } from "../multiagent/src/agents.ts";
 import { getParentSkillInventory } from "../multiagent/src/caller-skills.ts";
 import { runAgentTeam } from "../multiagent/src/delegation.ts";
 import { finalizeDetails, makeDetails, type AgentTeamRuntimeOptions } from "../multiagent/src/runtime-options.ts";
+import { readSubagentSkillConfig, SUBAGENT_SKILLS_FLAG } from "../multiagent/src/subagent-skills-config.ts";
 import type { AgentTeamDetails, ParentToolInfo, ParentToolInventory } from "../multiagent/src/types.ts";
 import { findPersona } from "./src/agent-registry/index.ts";
 import { agentInvocationToDetachedGraphStart, type AgentInvocation } from "./src/compat-surface/index.ts";
@@ -113,16 +114,23 @@ async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 }
 
 function buildRuntimeOptions(pi: ExtensionAPI, ctx: ExtensionContext, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): AgentTeamRuntimeOptions {
+	// The agent-team-subagent-skills flag is registered by the multiagent extension; orchestra's
+	// separate ExtensionAPI cannot read it (getFlag returns undefined), and the readSubagentSkillConfig
+	// default is "enabled" which propagates every caller skill and trips MAX_CALLER_SKILLS. Default the
+	// compat surface to "disabled" (pi-subagents semantics: children do not inherit caller skills) while
+	// still honoring the operator flag if it is readable.
+	const subagentSkills = readSubagentSkillConfig(pi.getFlag(SUBAGENT_SKILLS_FLAG) ?? "disabled");
 	return {
 		cwd: ctx.cwd,
 		packageAgentsDir,
-		materializationDiagnostics: [],
+		materializationDiagnostics: subagentSkills.diagnostics,
 		catalogLibrary: normalizeLibraryOptions(undefined),
 		catalogPreparationDiagnostics: [],
 		sessionId: ctx.sessionManager.getSessionId(),
 		defaults: { model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined, thinking: pi.getThinkingLevel() },
 		parentTools: getParentToolInventory(pi),
 		parentSkills: getParentSkillInventory(pi),
+		subagentSkills: subagentSkills.config,
 		signal,
 		onUpdate,
 		emitLifecycleEvent: (eventName, payload) => {
