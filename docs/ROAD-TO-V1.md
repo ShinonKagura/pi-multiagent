@@ -37,11 +37,14 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
       timeout + exclusion).
   - [ ] Document the canonical test command(s) in the README once the substrate suite is green.
 - **D2 [BLOCKER]** CI pipeline. _Done (first iteration) 2026-05-29:_ `.github/workflows/ci.yml` runs
-  on push/PR to `hb-orchestra-v0.5`/`main`: `pnpm install --frozen-lockfile` + `pnpm run typecheck`
-  (required) + the hb-orchestra-layer tests via node+loader (required gate) + the inherited substrate
-  suite (informational, `continue-on-error`, timeout-guarded). Green/red shows on GitHub on next push;
-  follow-ups: tighten the informational step into a required gate once the debt above is paid, and
-  add the `check:*` release scripts.
+  on push/PR to `hb-orchestra-v0.5`/`main`: `pnpm install --no-frozen-lockfile` (repo gitignores
+  lockfiles; `strictDepBuilds:false` in `pnpm-workspace.yaml` for the pnpm-11 build gate) +
+  `pnpm run typecheck` (required) + the hb-orchestra-layer tests via node+loader (required gate) +
+  the inherited substrate suite (informational, `continue-on-error`, timeout-guarded). **Confirmed
+  GREEN on GitHub Actions** (run 26655159894: install + typecheck + hb-orchestra layer 73/73 all ✓;
+  informational substrate step non-blocking). Follow-ups: tighten the informational step into a
+  required gate once the debt above is paid, add the `check:*` release scripts, and bump the actions
+  off the deprecated Node 20 runtime (warning only).
 
 ## Block A — Functional completeness (finish the layers)
 
