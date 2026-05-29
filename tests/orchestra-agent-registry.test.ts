@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { findPersona } from "../extensions/orchestra/src/agent-registry/persona-loader.ts";
+import { findPersona, listAllPersonas } from "../extensions/orchestra/src/agent-registry/persona-loader.ts";
 
 function makeFixture(personaBody: string): { cwd: string; cleanup: () => void } {
 	const cwd = mkdtempSync(join(tmpdir(), "hb-orchestra-fixture-"));
@@ -117,4 +117,167 @@ test("findPersona: integration with stellar/.pi/agents/coding_reviewer.md (optio
 	assert.ok(Array.isArray(p.frontmatter.fallbackModels), "fallbackModels expected to be an array");
 	assert.ok(Array.isArray(p.frontmatter.tools), "tools expected to be an array");
 	assert.match(p.systemPrompt, /Role/, "system prompt body expected");
+});
+
+test("listAllPersonas: enumerates project personas and ignores missing search dirs", () => {
+	const fx = makeFixture(`---
+name: alpha_agent
+package: coding
+---
+Alpha body
+`);
+	try {
+		rmSync(join(fx.cwd, ".pi", "agents", "test_persona.md"));
+		writeFileSync(join(fx.cwd, ".pi", "agents", "alpha_agent.md"), `---
+name: alpha_agent
+tools: read, grep
+---
+Alpha body
+`, "utf8");
+		writeFileSync(join(fx.cwd, ".pi", "agents", "beta_agent.md"), `---
+name: beta_agent
+inheritSkills: true
+---
+Beta body
+`, "utf8");
+
+		const catalog = listAllPersonas({ invocationCwd: fx.cwd, userHomeDir: join(fx.cwd, "missing-home") });
+		assert.deepEqual(catalog.personas.map((p) => p.frontmatter.name), ["alpha_agent", "beta_agent"]);
+		assert.equal(catalog.diagnostics.length, 0);
+		assert.equal(catalog.personas[0].source, "project");
+	} finally {
+		fx.cleanup();
+	}
+});
+
+test("findPersona: project persona shadows workspace/user/builtin with same name", () => {
+	const fx = makeFixture(`---
+name: shared_agent
+package: project
+---
+Project body
+`);
+	try {
+		rmSync(join(fx.cwd, ".pi", "agents", "test_persona.md"));
+		writeFileSync(join(fx.cwd, ".pi", "agents", "shared_agent.md"), `---
+name: shared_agent
+package: project
+---
+Project body
+`, "utf8");
+		mkdirSync(join(fx.cwd, ".agents", "agents"), { recursive: true });
+		writeFileSync(join(fx.cwd, ".agents", "agents", "shared_agent.md"), `---
+name: shared_agent
+package: workspace
+---
+Workspace body
+`, "utf8");
+		const userHomeDir = join(fx.cwd, "home");
+		mkdirSync(join(userHomeDir, ".pi", "agent", "agents"), { recursive: true });
+		writeFileSync(join(userHomeDir, ".pi", "agent", "agents", "shared_agent.md"), `---
+name: shared_agent
+package: user
+---
+User body
+`, "utf8");
+		const builtinAgentDir = join(fx.cwd, "builtin");
+		mkdirSync(builtinAgentDir, { recursive: true });
+		writeFileSync(join(builtinAgentDir, "shared_agent.md"), `---
+name: shared_agent
+package: builtin
+---
+Builtin body
+`, "utf8");
+
+		const lookup = findPersona("shared_agent", { invocationCwd: fx.cwd, userHomeDir, builtinAgentDir });
+		assert.equal(lookup.diagnostic, undefined);
+		assert.ok(lookup.persona);
+		assert.equal(lookup.persona!.source, "project");
+		assert.equal(lookup.persona!.frontmatter.package, "project");
+	} finally {
+		fx.cleanup();
+	}
+});
+
+test("findPersona: accepts frontmatter without a body newline", () => {
+	const fx = makeFixture("---\nname: ignored\n---\nbody");
+	try {
+		rmSync(join(fx.cwd, ".pi", "agents", "test_persona.md"));
+		writeFileSync(join(fx.cwd, ".pi", "agents", "no_body.md"), "---\nname: no_body\n---", "utf8");
+		const lookup = findPersona("no_body", { invocationCwd: fx.cwd, userHomeDir: join(fx.cwd, "missing-home") });
+		assert.equal(lookup.diagnostic, undefined);
+		assert.ok(lookup.persona);
+		assert.equal(lookup.persona!.systemPrompt, "");
+	} finally {
+		fx.cleanup();
+	}
+});
+
+test("findPersona: resolves case-insensitive filenames", () => {
+	const fx = makeFixture("---\nname: ignored\n---\nbody");
+	try {
+		rmSync(join(fx.cwd, ".pi", "agents", "test_persona.md"));
+		writeFileSync(join(fx.cwd, ".pi", "agents", "Case_Agent.md"), `---
+name: Case_Agent
+---
+Case body
+`, "utf8");
+		const lookup = findPersona("case_agent", { invocationCwd: fx.cwd });
+		assert.equal(lookup.diagnostic, undefined);
+		assert.ok(lookup.persona);
+		assert.equal(lookup.persona!.frontmatter.name, "Case_Agent");
+	} finally {
+		fx.cleanup();
+	}
+});
+
+test("findPersona: resolves a unique fuzzy persona match", () => {
+	const fx = makeFixture("---\nname: ignored\n---\nbody");
+	try {
+		rmSync(join(fx.cwd, ".pi", "agents", "test_persona.md"));
+		writeFileSync(join(fx.cwd, ".pi", "agents", "coding_reviewer.md"), `---
+name: coding_reviewer
+---
+Reviewer body
+`, "utf8");
+		const lookup = findPersona("reviewer", { invocationCwd: fx.cwd });
+		assert.equal(lookup.diagnostic, undefined);
+		assert.ok(lookup.persona);
+		assert.equal(lookup.persona!.frontmatter.name, "coding_reviewer");
+	} finally {
+		fx.cleanup();
+	}
+});
+
+test("findPersona: reports ambiguous fuzzy matches", () => {
+	const fx = makeFixture("---\nname: ignored\n---\nbody");
+	try {
+		rmSync(join(fx.cwd, ".pi", "agents", "test_persona.md"));
+		writeFileSync(join(fx.cwd, ".pi", "agents", "coding_reviewer.md"), "---\nname: coding_reviewer\n---\nbody", "utf8");
+		writeFileSync(join(fx.cwd, ".pi", "agents", "docs_reviewer.md"), "---\nname: docs_reviewer\n---\nbody", "utf8");
+		const lookup = findPersona("reviewer", { invocationCwd: fx.cwd });
+		assert.equal(lookup.persona, undefined);
+		assert.match(lookup.diagnostic ?? "", /ambiguous/);
+	} finally {
+		fx.cleanup();
+	}
+});
+
+test("listAllPersonas: records invalid frontmatter diagnostics", () => {
+	const fx = makeFixture("---\nname: ignored\n---\nbody");
+	try {
+		rmSync(join(fx.cwd, ".pi", "agents", "test_persona.md"));
+		writeFileSync(join(fx.cwd, ".pi", "agents", "bad_agent.md"), `---
+name: bad_agent
+inheritSkills: maybe
+---
+Bad body
+`, "utf8");
+		const catalog = listAllPersonas({ invocationCwd: fx.cwd, userHomeDir: join(fx.cwd, "missing-home") });
+		assert.deepEqual(catalog.personas, []);
+		assert.equal(catalog.diagnostics.length, 1);
+		assert.equal(catalog.diagnostics[0].code, "persona-frontmatter-invalid");
+	} finally {
+		fx.cleanup();
+	}
 });

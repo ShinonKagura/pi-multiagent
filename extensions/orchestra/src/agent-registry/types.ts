@@ -63,6 +63,24 @@ export interface Persona {
 
 export type PersonaSource = "project" | "workspace" | "user" | "builtin";
 
+export interface PersonaDiagnostic {
+	code: string;
+	message: string;
+	path?: string;
+	severity: "warning" | "error";
+}
+
+export interface PersonaSearchDir {
+	dir: string;
+	source: PersonaSource;
+}
+
+export interface PersonaCatalog {
+	personas: Persona[];
+	diagnostics: PersonaDiagnostic[];
+	searchedDirs: PersonaSearchDir[];
+}
+
 /**
  * Result of a persona lookup. `notFound` returns an empty `persona` and a `diagnostic`.
  */

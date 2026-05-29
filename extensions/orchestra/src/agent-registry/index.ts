@@ -4,7 +4,7 @@
  * across the 4 search paths (project, workspace, user, builtin) and returns
  * normalized `Persona` records ready for the Profile Engine (Layer 2).
  *
- * v0.5 status: skeleton + parse + exact-name lookup.
+ * v0.5 status: parse + catalog + case-insensitive/fuzzy lookup.
  *
  * Out of scope for this layer:
  *   - profile composition (chain/parallel) — Layer 2
@@ -13,6 +13,6 @@
  *   - run manifest writing — Layer 5
  */
 
-export type { Persona, PersonaFrontmatter, PersonaLookup, PersonaSource, PersonaDiscoveryInput } from "./types.ts";
+export type { Persona, PersonaCatalog, PersonaDiagnostic, PersonaFrontmatter, PersonaLookup, PersonaSearchDir, PersonaSource, PersonaDiscoveryInput } from "./types.ts";
 export { PERSONA_SEARCH_PATHS } from "./types.ts";
-export { findPersona } from "./persona-loader.ts";
+export { findPersona, listAllPersonas } from "./persona-loader.ts";
