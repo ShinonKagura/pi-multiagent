@@ -551,7 +551,7 @@ test("start launches write-capable package worker when graph authority grants th
 			graph: {
 				objective: "worker",
 				authority: { allowFilesystemRead: true, allowShellTools: true, allowMutationTools: true },
-				steps: [{ id: "one", agent: { ref: "package:worker" }, task: "Implement the delegated change." }],
+				steps: [{ id: "one", agent: { ref: "package:worker" }, task: "Implement the delegated change.", mutationScope: "edit under src/, no deletes" }],
 			},
 			options: { terminalRetentionSeconds: 30 },
 		},

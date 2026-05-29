@@ -237,7 +237,7 @@ test("resolveDetachedGraph treats explicit tools as strict overrides", async () 
 	assert.deepEqual(denied.steps, []);
 });
 
-test("resolveDetachedGraph fails package:validator closed without effective shell capability", async () => {
+test("resolveDetachedGraph caps package:validator default tools to granted authority (no hard shell requirement)", async () => {
 	const cwd = await mkdir(join(tmpdir(), `pi-multiagent-plan-validator-tools-${Date.now()}`), { recursive: true });
 	const validator = packageAgent("validator", ["read", "bash"]);
 	const allowed = resolveDetachedGraph(
@@ -256,8 +256,10 @@ test("resolveDetachedGraph fails package:validator closed without effective shel
 		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
 		undefined,
 	);
-	assert.equal(cappedDefault.diagnostics.some((item) => item.code === "validator-shell-capability-required"), true);
-	assert.deepEqual(cappedDefault.steps, []);
+	// No shell authority: bash is capped out of the default tool set with a warning; the step still runs read-only.
+	assert.equal(cappedDefault.diagnostics.some((item) => item.severity === "error"), false);
+	assert.equal(cappedDefault.diagnostics.some((item) => item.code === "catalog-default-tools-capped"), true);
+	assert.deepEqual(cappedDefault.steps[0]?.agent.tools, [...READONLY_CHILD_TOOL_NAMES]);
 	const explicitReadOnly = resolveDetachedGraph(
 		{ objective: "validator", authority: { allowFilesystemRead: true, allowShellTools: true }, steps: [{ id: "one", agent: { ref: "package:validator", tools: ["read"] }, task: "Review only." }] },
 		[validator],
@@ -265,15 +267,16 @@ test("resolveDetachedGraph fails package:validator closed without effective shel
 		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
 		undefined,
 	);
-	assert.equal(explicitReadOnly.diagnostics.some((item) => item.code === "validator-shell-capability-required"), true);
-	assert.deepEqual(explicitReadOnly.steps, []);
+	// Explicit read-only tools are honored without error (no hard validator-shell requirement).
+	assert.equal(explicitReadOnly.diagnostics.some((item) => item.severity === "error"), false);
+	assert.deepEqual(explicitReadOnly.steps[0]?.agent.tools, [...READONLY_CHILD_TOOL_NAMES]);
 });
 
-test("resolveDetachedGraph fails package:worker closed without effective mutation capability", async () => {
+test("resolveDetachedGraph requires a mutationScope for mutation-capable steps (package:worker and inline edit/write)", async () => {
 	const cwd = await mkdir(join(tmpdir(), `pi-multiagent-plan-worker-tools-${Date.now()}`), { recursive: true });
 	const worker = packageAgent("worker", ["read", "bash", "edit", "write"]);
 	const allowed = resolveDetachedGraph(
-		{ objective: "worker", authority: { allowFilesystemRead: true, allowShellTools: true, allowMutationTools: true }, steps: [{ id: "one", agent: { ref: "package:worker" }, task: "Implement the delegated change." }] },
+		{ objective: "worker", authority: { allowFilesystemRead: true, allowShellTools: true, allowMutationTools: true }, steps: [{ id: "one", agent: { ref: "package:worker" }, task: "Implement the delegated change.", mutationScope: "edit under src/, no deletes" }] },
 		[worker],
 		[],
 		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
@@ -288,10 +291,11 @@ test("resolveDetachedGraph fails package:worker closed without effective mutatio
 		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
 		undefined,
 	);
-	assert.equal(shellOnlyWorker.diagnostics.some((item) => item.code === "worker-mutation-capability-required"), true);
+	// package:worker is a mutation-capable role, so it requires an explicit mutationScope even when capped to bash.
+	assert.equal(shellOnlyWorker.diagnostics.some((item) => item.code === "mutation-scope-required"), true);
 	assert.deepEqual(shellOnlyWorker.steps, []);
 	const inlineWrite = resolveDetachedGraph(
-		{ objective: "inline", authority: { allowFilesystemRead: true, allowMutationTools: true }, steps: [{ id: "one", agent: { system: "x", tools: ["edit"] }, task: "Edit." }] },
+		{ objective: "inline", authority: { allowFilesystemRead: true, allowMutationTools: true }, steps: [{ id: "one", agent: { system: "x", tools: ["edit"] }, task: "Edit.", mutationScope: "edit under src/" }] },
 		[],
 		[],
 		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
@@ -306,8 +310,9 @@ test("resolveDetachedGraph fails package:worker closed without effective mutatio
 		{ cwd, invocationCwd: cwd, parentTools, parentSkills },
 		undefined,
 	);
-	assert.equal(readOnlyWorker.diagnostics.some((item) => item.code === "worker-mutation-capability-required"), true);
-	assert.deepEqual(readOnlyWorker.steps, []);
+	// A worker explicitly capped to read-only is not a mutation step, so no mutationScope is required.
+	assert.equal(readOnlyWorker.diagnostics.some((item) => item.severity === "error"), false);
+	assert.deepEqual(readOnlyWorker.steps[0]?.agent.tools, [...READONLY_CHILD_TOOL_NAMES]);
 });
 
 test("resolveDetachedGraph grants source-verified extension tools only with extension authority", async () => {
