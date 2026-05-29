@@ -42,6 +42,40 @@ Not yet:
 
 ---
 
+## Real-Pi load fixes & remaining items (2026-05-29)
+
+The first real-Pi (`pi --print`, v0.77.0) smoke from the Stellar workspace found that the prior
+"🟡 L6 minimal" claim was not actually loadable/usable. Fixes applied (see
+`docs/7.7-real-pi-smoke-receipt.md` for full evidence):
+
+- **FIX-1 — fork now loads.** `extensions/multiagent/index.ts` imported `./src/library-policy.ts`,
+  which was dropped during the fork trim (upstream deleted it in 0.9.3) and never recorded as a
+  deletion, so the extension failed to load with `Cannot find module './src/library-policy.ts'`.
+  Restored from history (`80bc8a8^`). bun tests never caught it because they import source modules
+  directly and never load `index.ts`.
+- **FIX-2 — `/agent` works in a normal skill-rich session.** orchestra's `buildRuntimeOptions`
+  passed no `subagentSkills` config, so `readSubagentSkillConfig(undefined)` defaulted to `enabled`
+  → all ~120 caller skills propagated → `MAX_CALLER_SKILLS` (128) tripped → child never started.
+  The `--agent-team-subagent-skills` flag does not help because orchestra's separate `ExtensionAPI`
+  cannot read a flag registered by the multiagent extension. Fixed by defaulting the compat surface
+  to `disabled` (pi-subagents semantics) while still honoring the flag if readable.
+- **OPEN-1 — `agent_team run_status` now finds orchestra-started runs.** `detached-registry.ts`
+  held a module-local `Map`; loading orchestra + multiagent as two `-e` extensions created two
+  module instances → split-brain registry (orchestra registered runs that `run_status` /
+  `step_result` / `message` / `cancel` could not find; `list` still worked because it also reads
+  persistent disk state). Fixed by anchoring the Map on `globalThis` (true per-process singleton),
+  which repairs all five actions at once. Verified: `Agent` start → `run_status <runId>` resolves
+  and tracks to `terminal=true`.
+
+Still open:
+- **OPEN-2 (latent)** — per-process runId namespace (`r1,r2,...`) collides across Pi processes;
+  already tracked as ROADMAP v0.7 I2 (detection-defense only for now).
+- **Project-agent personas** (e.g. project `.pi/agents/coding_reviewer.md`) require interactive UI
+  confirmation ("Load project agents?", fail-closed library policy). Headless `--print` is denied by
+  design; the interactive operator TTY run prompts and proceeds.
+
+---
+
 ## Verification
 
 ```bash
@@ -63,5 +97,5 @@ Known environmental caveats (pre-existing, not hb-orchestra regressions):
 ## Gate state
 
 - Architecture gate (ARCHITECTURE §7): **closed** — Mark approved I1–I8 (2026-05-28); GPT-5.5 review captured in the Stellar hb-orchestra documentation audit. Optional external second-opinion is not a blocker.
-- Roadmap gate 7.7 (Real-Pi smoke across 20+ Stellar personas via `Agent()` + `/agent`): **open** — operator-run; required before 7.8.
+- Roadmap gate 7.7 (Real-Pi smoke across 20+ Stellar personas via `Agent()` + `/agent`): **partial** — automated headless probe is green for Load + `/agent`/`Agent` start + `run_status` inspection after FIX-1/FIX-2/OPEN-1 (package persona `reviewer`); the formal cross-persona **interactive operator TTY run** (project-agent confirmation + 20+ personas) is still required before 7.8.
 - Roadmap gate 7.8 (remove `pi-subagents` + `taskplane`): **blocked** until 7.7 is fully green and a backup exists.
