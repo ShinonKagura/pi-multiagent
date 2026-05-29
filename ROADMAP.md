@@ -11,7 +11,7 @@
 | 7.3 | L3 execution-runtime | ✅ GRAPH MAPPING DONE | Pure `profileToDetachedGraphStart()` maps resolved profiles to schema-valid detached `agent_team` start graphs with chain/parallel dependencies, inferred authority, model/thinking lane preservation, and mutation-scope validation. Tool/slash-command registration remains L6. |
 | 7.4 | L4 harness-contracts | ⏳ | Optional `.pi/harness/` / `.agents/harness/` reader. PlanPacket-lite, mutation-scope, artifact-ready, review-gate schemas. Read-only — package never writes to `.pi/harness/`. |
 | 7.5 | L5 reproducibility-ledger | ⏳ | Run manifest writer, run_hash compute, artifact mirror, replay engine. |
-| 7.6 | L6 compat-surface | ⏳ | `Agent()` tool + `get_subagent_result` + `steer_subagent`. `/agent` + `/profile` slash commands. |
+| 7.6 | L6 compat-surface | 🟡 AGENT + /agent DONE | `Agent` tool + `/agent <persona> <task>` command resolve a persona (L1), map to a single-step detached graph (pure mapper, schema-valid + `resolveDetachedGraph`-plannable), and start via the inherited `agent_team` substrate (detached, returns runId). Pending: foreground inline-result wait, `get_subagent_result`, `steer_subagent`, `Profile()` + `/profile`. Real-Pi smoke is 7.7. |
 | 7.7 | — | ⏳ | Real-Pi smoke test: all 20+ Stellar personas via `Agent()` + `/agent` + `/profile`. |
 | 7.8 | — | ⏳ | Removal of `pi-subagents` + `taskplane` (only after 7.7 fully green + backup taken). |
 
