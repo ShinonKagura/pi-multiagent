@@ -8,6 +8,9 @@
  *     workflow (Layer 2 resolve + Layer 1 personas -> Layer 3 detached graph).
  *   - `get_subagent_result` / `steer_subagent`: pi-subagents-compatible wrappers over the
  *     inherited `agent_team` run_status / message actions for a detached run by runId.
+ *   - Optional `waitSeconds` on `Agent`/`Profile`: bounded foreground wait that returns the
+ *     finished result inline, still returning the runId on timeout (ARCHITECTURE I1: never blocks
+ *     the parent indefinitely).
  *
  * Both resolve a `.pi/agents/<name>.md` persona via Layer 1, map it to a single
  * inline-step detached graph via the Layer 6 pure mapper, and start it through
@@ -15,7 +18,8 @@
  * (ARCHITECTURE I1): the call returns a run receipt with a runId immediately;
  * inspect/steer/cancel via the existing `agent_team` actions.
  *
- * Still deferred (later L6 increments): foreground inline-result waiting.
+ * L6 compat surface is feature-complete for v0.5 (Agent/Profile tools + /agent//profile commands
+ * + get_subagent_result/steer_subagent + bounded foreground wait).
  * The inherited `agent_team` tool stays registered by `extensions/multiagent/index.ts`.
  */
 
@@ -29,7 +33,7 @@ import { getParentSkillInventory } from "../multiagent/src/caller-skills.ts";
 import { runAgentTeam } from "../multiagent/src/delegation.ts";
 import { finalizeDetails, makeDetails, type AgentTeamRuntimeOptions } from "../multiagent/src/runtime-options.ts";
 import { readSubagentSkillConfig, SUBAGENT_SKILLS_FLAG } from "../multiagent/src/subagent-skills-config.ts";
-import type { AgentTeamDetails, ParentToolInfo, ParentToolInventory } from "../multiagent/src/types.ts";
+import type { AgentTeamDetails, GraphSpecInput, ParentToolInfo, ParentToolInventory } from "../multiagent/src/types.ts";
 import { findPersona } from "./src/agent-registry/index.ts";
 import { agentInvocationToDetachedGraphStart, type AgentInvocation } from "./src/compat-surface/index.ts";
 import { profileToDetachedGraphStart } from "./src/execution-runtime/index.ts";
@@ -47,6 +51,7 @@ const AgentToolSchema = Type.Object({
 	tools: Type.Optional(Type.Array(Type.String(), { description: "Optional strict child tool allowlist. Falls back to the persona's frontmatter tools." })),
 	mutationScope: Type.Optional(Type.String({ description: "Required when the effective tools include edit/write." })),
 	isolation: Type.Optional(Type.Literal("worktree", { description: "Run the mutation-capable agent inside a per-step git worktree." })),
+	waitSeconds: Type.Optional(Type.Number({ description: "Foreground wait: block up to N seconds (bounded, capped at 600) polling for the run to finish and return its result inline. Omit for detached (returns a runId immediately). On timeout the result still carries the runId for get_subagent_result.", minimum: 1, maximum: 600, multipleOf: 1 })),
 });
 
 type AgentToolParams = Static<typeof AgentToolSchema>;
@@ -57,6 +62,7 @@ const ProfileToolSchema = Type.Object({
 	description: Type.Optional(Type.String({ description: "Optional run objective/label. Defaults to a profile-derived objective." })),
 	mutationScope: Type.Optional(Type.String({ description: "Required when any profile member's effective tools include edit/write." })),
 	isolation: Type.Optional(Type.Literal("worktree", { description: "Run mutation-capable members inside a per-step git worktree." })),
+	waitSeconds: Type.Optional(Type.Number({ description: "Foreground wait: block up to N seconds (bounded, capped at 600) polling for the run to finish and return its result inline. Omit for detached (returns a runId immediately). On timeout the result still carries the runId for get_subagent_result.", minimum: 1, maximum: 600, multipleOf: 1 })),
 });
 
 type ProfileToolParams = Static<typeof ProfileToolSchema>;
@@ -110,7 +116,7 @@ export default function orchestraExtension(pi: ExtensionAPI): void {
 		promptSnippet: "Run a .pi/agents persona by name as a detached agent; inspect via agent_team run_status.",
 		parameters: AgentToolSchema,
 		async execute(_toolCallId, params: AgentToolParams, signal, onUpdate, ctx) {
-			return startPersonaRun(pi, ctx, toInvocation(params), signal, onUpdate);
+			return startPersonaRun(pi, ctx, toInvocation(params), signal, onUpdate, params.waitSeconds);
 		},
 	});
 
@@ -146,7 +152,7 @@ export default function orchestraExtension(pi: ExtensionAPI): void {
 		promptSnippet: "Run a .pi/profiles chain/parallel workflow by name as a detached agent_team run; inspect via agent_team run_status.",
 		parameters: ProfileToolSchema,
 		async execute(_toolCallId, params: ProfileToolParams, signal, onUpdate, ctx) {
-			return startProfileRun(pi, ctx, toProfileInvocation(params), signal, onUpdate);
+			return startProfileRun(pi, ctx, toProfileInvocation(params), signal, onUpdate, params.waitSeconds);
 		},
 	});
 
@@ -226,7 +232,7 @@ function toInvocation(params: AgentToolParams): AgentInvocation {
 }
 
 /** Resolve persona -> map to detached single-step graph -> start via inherited agent_team substrate. */
-async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocation: AgentInvocation, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): Promise<AgentToolResult<AgentTeamDetails>> {
+async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocation: AgentInvocation, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined, waitSeconds?: number): Promise<AgentToolResult<AgentTeamDetails>> {
 	const options = buildRuntimeOptions(pi, ctx, signal, onUpdate);
 	const lookup = findPersona(invocation.subagent_type, { invocationCwd: ctx.cwd, userHomeDir: homedir(), builtinAgentDir: packageAgentsDir });
 	if (!lookup.persona) {
@@ -237,11 +243,11 @@ async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 		const first = mapped.diagnostics.find((item) => item.severity === "error");
 		return errorResult(options, first?.code ?? "agent-invocation-invalid", first ? `${first.code}: ${first.message}` : "Agent invocation could not be mapped to a detached graph.");
 	}
-	return runAgentTeam({ action: "start", graph: mapped.graph }, options);
+	return startRunMaybeWait(options, mapped.graph, waitSeconds);
 }
 
 /** Resolve profile (L2) + member personas (L1) -> map to detached chain/parallel graph (L3) -> start via inherited agent_team substrate. */
-async function startProfileRun(pi: ExtensionAPI, ctx: ExtensionContext, invocation: ProfileInvocation, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): Promise<AgentToolResult<AgentTeamDetails>> {
+async function startProfileRun(pi: ExtensionAPI, ctx: ExtensionContext, invocation: ProfileInvocation, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined, waitSeconds?: number): Promise<AgentToolResult<AgentTeamDetails>> {
 	const options = buildRuntimeOptions(pi, ctx, signal, onUpdate);
 	const lookup = findProfile(invocation.profile, { invocationCwd: ctx.cwd });
 	if (!lookup.profile) {
@@ -254,7 +260,7 @@ async function startProfileRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 		const first = mapped.diagnostics.find((item) => item.severity === "error");
 		return errorResult(options, first?.code ?? "profile-invocation-invalid", first ? `${first.code}: ${first.message}` : "Profile could not be mapped to a detached graph.");
 	}
-	return runAgentTeam({ action: "start", graph: mapped.graph }, options);
+	return startRunMaybeWait(options, mapped.graph, waitSeconds);
 }
 
 /** pi-subagents-compatible result fetch: wraps agent_team run_status (or step_result for one step). */
@@ -279,6 +285,36 @@ async function steerSubagent(pi: ExtensionAPI, ctx: ExtensionContext, params: St
 	}
 	const channel: "steer" | "follow_up" = params.channel === "follow_up" ? "follow_up" : "steer";
 	return runAgentTeam({ action: "message", runId: params.runId, stepId, channel, text: params.message }, options);
+}
+
+const FOREGROUND_WAIT_CAP_SECONDS = 600;
+const RUN_STATUS_WAIT_CHUNK_SECONDS = 30; // <= MAX_RUN_STATUS_WAIT_SECONDS (60)
+
+/** Clamp a requested foreground wait to a bounded window. ARCHITECTURE I1: the foreground wrapper must
+ * never trap the parent on hung child compute, so undefined/invalid -> no wait, and the cap is hard. */
+export function clampForegroundWaitSeconds(waitSeconds: number | undefined): number | undefined {
+	if (waitSeconds === undefined || !Number.isFinite(waitSeconds) || waitSeconds < 1) return undefined;
+	return Math.min(Math.floor(waitSeconds), FOREGROUND_WAIT_CAP_SECONDS);
+}
+
+/** Start a detached run; when waitSeconds is set, bounded-poll run_status and return the (possibly
+ * terminal) result inline. Always returns within the cap; on timeout the snapshot still carries the
+ * runId so the parent can inspect later with get_subagent_result. */
+async function startRunMaybeWait(options: AgentTeamRuntimeOptions, graph: GraphSpecInput, waitSeconds?: number): Promise<AgentToolResult<AgentTeamDetails>> {
+	const started = await runAgentTeam({ action: "start", graph }, options);
+	const cap = clampForegroundWaitSeconds(waitSeconds);
+	if (cap === undefined || started.details?.ok === false) return started;
+	const runId = started.details?.run?.runId;
+	if (!runId || started.details?.run?.terminal === true) return started;
+	const deadline = Date.now() + cap * 1000;
+	let last = started;
+	while (Date.now() < deadline) {
+		const remaining = Math.ceil((deadline - Date.now()) / 1000);
+		const chunk = Math.max(1, Math.min(remaining, RUN_STATUS_WAIT_CHUNK_SECONDS));
+		last = await runAgentTeam({ action: "run_status", runId, waitSeconds: chunk, preview: true }, options);
+		if (last.details?.ok === false || last.details?.run?.terminal === true) return last;
+	}
+	return last;
 }
 
 function buildRuntimeOptions(pi: ExtensionAPI, ctx: ExtensionContext, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): AgentTeamRuntimeOptions {
@@ -316,7 +352,7 @@ function buildRuntimeOptions(pi: ExtensionAPI, ctx: ExtensionContext, signal: Ab
 }
 
 function errorResult(options: AgentTeamRuntimeOptions, code: string, message: string): AgentToolResult<AgentTeamDetails> {
-	return finalizeDetails(makeDetails("start", false, [{ code, message, severity: "error" }], options, {}, { code, message }));
+	return finalizeDetails(makeDetails("start", false, [{ code, message, severity: "error", path: undefined }], options, {}, { code, message }));
 }
 
 function resultText(result: AgentToolResult<AgentTeamDetails>): string {
