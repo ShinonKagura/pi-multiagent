@@ -28,6 +28,9 @@
   "engines": {
     "node": ">=20.6.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": []
+  },
   "publishConfig": {
     "access": "public"
   },
