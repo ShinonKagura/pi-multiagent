@@ -19,20 +19,29 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
     `MutationWorktreeState`, and **implemented the missing `formatAgentTeamLiveStatus`** (a real
     latent runtime bug — it was called by the live-run widget but defined nowhere).
   - [x] Confirmed the orchestra layer is unaffected: `bun test tests/orchestra-*.test.ts` 73/73.
-  - [ ] **node+loader runner is blocked LOCALLY**, not by our code: tests that import the delegation
-    chain pull the real `@earendil-works/pi-coding-agent` **from the global npm install**, whose
-    `typebox` resolution is broken (`typebox/build/compile/index.mjs` ENOENT; the nested typebox is
-    absent). bun finds a complete typebox; node hits the broken global one. **Fix path: validate
-    node+loader on a clean CI install (D2), where pnpm rebuilds a correct peer tree** — possibly pin
-    typebox. Do not try to patch the global install.
-  - [ ] **Inherited multiagent tests are partly stale** (revealed once the runner works): e.g.
-    `authority-policy` expects 4 authority keys but the source already has 6
-    (`allowProjectCode`, `allowMutationWorktree`). Focused sub-task: update stale expectations to the
-    current contract. ~19 test files currently red under node+loader (most likely the same typebox
-    ENOENT via the delegation import; a subset are genuine stale-expectation fails).
-  - [ ] Document the canonical test command(s) in the README once node+loader is green on CI.
-- [ ] **D2 [BLOCKER]** Add a CI pipeline (GitHub Actions) that runs install + typecheck + the test
-  suite on a clean runner for the `hb-orchestra-v0.5` branch and PRs.
+  - [x] **node+loader runner FIXED.** The `tests/pi-peer-loader.mjs` hardcoded typebox/pi-tui as
+    NESTED under the peer root, which only holds for a flat global npm install; a clean pnpm/CI
+    install HOISTS them to the top level, so node died with `typebox/build/compile ENOENT`. The
+    loader now resolves each peer specifier via Node resolution from the fork root first (pnpm/CI),
+    then the legacy nested path (flat global). Result: **node+loader suite 25/45 → 38/45 green**, and
+    all 12 `orchestra-*` files pass.
+  - [ ] **Pay down inherited multiagent test debt** — 7 files still red under node+loader, all
+    pre-existing substrate issues (NOT the orchestra layer):
+    - stale expectations (mechanical): `authority-policy` (expects 4 authority keys; source has 6 —
+      `allowProjectCode`, `allowMutationWorktree`), `result-format` (healthy-run wording drifted).
+    - need a design decision (do not guess): `rendering` (source uses `ctx.ui.setStatus`; test
+      forbids the shared footer row), `examples` (`worktree-isolated-mutation.json` is
+      mutation-capable but the test asserts no packaged example may be).
+    - inspect: `delegation`, `planning` (assertion drift — stale vs behavioral TBD).
+    - slow/hang: `worktree-isolation-persistence-interlock` (quarantined from CI via per-test
+      timeout + exclusion).
+  - [ ] Document the canonical test command(s) in the README once the substrate suite is green.
+- **D2 [BLOCKER]** CI pipeline. _Done (first iteration) 2026-05-29:_ `.github/workflows/ci.yml` runs
+  on push/PR to `hb-orchestra-v0.5`/`main`: `pnpm install --frozen-lockfile` + `pnpm run typecheck`
+  (required) + the hb-orchestra-layer tests via node+loader (required gate) + the inherited substrate
+  suite (informational, `continue-on-error`, timeout-guarded). Green/red shows on GitHub on next push;
+  follow-ups: tighten the informational step into a required gate once the debt above is paid, and
+  add the `check:*` release scripts.
 
 ## Block A — Functional completeness (finish the layers)
 

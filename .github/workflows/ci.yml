@@ -1,0 +1,51 @@
+name: CI
+
+# The "test robot": on every push/PR to the v0.5 line, prove the code still typechecks and the
+# hb-orchestra layer's tests pass on a clean machine. The inherited multiagent substrate suite runs
+# as a non-blocking informational step while its known test debt is worked down (see ROAD-TO-V1.md).
+
+on:
+  push:
+    branches: [hb-orchestra-v0.5, main]
+  pull_request:
+
+# GitHub Actions sets CI=true, which lets pnpm install run non-interactively (no TTY purge prompt).
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Required gate 1: the whole repo typechecks (0 errors).
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      # Required gate 2: the hb-orchestra layer's own tests (our v1.0 product surface) are green.
+      - name: Test — hb-orchestra layer
+        run: >-
+          node --no-warnings --experimental-strip-types --test-timeout=60000
+          --loader ./tests/pi-peer-loader.mjs
+          --test tests/orchestra-*.test.ts
+
+      # Informational only: the inherited multiagent substrate suite. Has known pre-existing test
+      # debt (stale authority/wording expectations + a slow worktree interlock test) tracked in
+      # docs/ROAD-TO-V1.md. continue-on-error keeps it from blocking the gate until that debt is paid.
+      - name: Test — inherited substrate suite (informational)
+        continue-on-error: true
+        run: |
+          files=$(ls tests/*.test.ts | grep -v '/orchestra-' | grep -v 'worktree-isolation-persistence-interlock')
+          timeout 600 node --no-warnings --experimental-strip-types --test-timeout=60000 \
+            --loader ./tests/pi-peer-loader.mjs --test $files
