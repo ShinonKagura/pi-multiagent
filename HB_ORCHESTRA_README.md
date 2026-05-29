@@ -13,6 +13,7 @@ Fork of `pi-multiagent` (Tiziano-AI/pi-multiagent v0.10.0) with extended product
 - Spec / design lock: [`ARCHITECTURE.md`](./ARCHITECTURE.md) — 8 invariants, 6-layer architecture, 7 anti-patterns.
 - Roadmap: [`ROADMAP.md`](./ROADMAP.md).
 - **What actually exists vs planned: [`docs/hb-orchestra-status.md`](./docs/hb-orchestra-status.md)** — the single source of truth tying docs → code → tests.
+- **How to use it productively: [`docs/USING-HB-ORCHESTRA.md`](./docs/USING-HB-ORCHESTRA.md)** — delegate, inspect, steer, profiles, replay, harness governance, and v0.5 caveats.
 
 Implemented today: Layer 1 (agent-registry), Layer 2 (profile-engine composition), Layer 3 (profile→detached-graph mapping), and a Layer 6 minimal slice (`Agent` tool + `/agent` command). Everything else below is a v0.5 target, not a shipped feature.
 
