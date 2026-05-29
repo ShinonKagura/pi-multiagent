@@ -12,7 +12,9 @@
  *     finished result inline, still returning the runId on timeout (ARCHITECTURE I1: never blocks
  *     the parent indefinitely).
  *   - `/harness`: read-only discovery of an optional project/workspace harness contract (Layer 4;
- *     ARCHITECTURE I6 — reads `.pi/harness/` or `.agents/harness/`, never writes).
+ *     ARCHITECTURE I6 — reads `.pi/harness/` or `.agents/harness/`, never writes). When present, the
+ *     contract is enforced on `Agent`/`Profile` runs: systemPromptFiles are injected into step prompts
+ *     and a `mutationAllowed:false` contract blocks runs that request edit/write.
  *   - run_hash on each `Agent`/`Profile` start: a deterministic reproducibility fingerprint over the
  *     composed inputs, emitted as a `hb-orchestra:run-hash` event and appended to the start result (Layer 5).
  *   - `Replay` tool + `/replay <run_hash|runId>`: re-execute a prior run from the persisted replay
@@ -43,7 +45,7 @@ import type { AgentTeamDetails, GraphSpecInput, ParentToolInfo, ParentToolInvent
 import { findPersona } from "./src/agent-registry/index.ts";
 import { agentInvocationToDetachedGraphStart, type AgentInvocation } from "./src/compat-surface/index.ts";
 import { profileToDetachedGraphStart } from "./src/execution-runtime/index.ts";
-import { findHarnessContract, summarizeHarnessContract } from "./src/harness-contracts/index.ts";
+import { applyHarnessContract, findHarnessContract, summarizeHarnessContract } from "./src/harness-contracts/index.ts";
 import { findProfile, resolveProfile } from "./src/profile-engine/index.ts";
 import { buildReplayManifest, composedInputsFromGraph, computeRunHash, loadReplayManifest, writeReplayManifest } from "./src/reproducibility-ledger/index.ts";
 
@@ -295,7 +297,9 @@ async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 		const first = mapped.diagnostics.find((item) => item.severity === "error");
 		return errorResult(options, first?.code ?? "agent-invocation-invalid", first ? `${first.code}: ${first.message}` : "Agent invocation could not be mapped to a detached graph.");
 	}
-	return startRunMaybeWait(options, mapped.graph, waitSeconds);
+	const harness = applyHarnessContract(mapped.graph, ctx.cwd);
+	if (harness.blocked) return errorResult(options, "harness-mutation-denied", harness.reason ?? "Harness contract denied this run.");
+	return startRunMaybeWait(options, harness.graph, waitSeconds);
 }
 
 /** Resolve profile (L2) + member personas (L1) -> map to detached chain/parallel graph (L3) -> start via inherited agent_team substrate. */
@@ -312,7 +316,9 @@ async function startProfileRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 		const first = mapped.diagnostics.find((item) => item.severity === "error");
 		return errorResult(options, first?.code ?? "profile-invocation-invalid", first ? `${first.code}: ${first.message}` : "Profile could not be mapped to a detached graph.");
 	}
-	return startRunMaybeWait(options, mapped.graph, waitSeconds);
+	const harness = applyHarnessContract(mapped.graph, ctx.cwd);
+	if (harness.blocked) return errorResult(options, "harness-mutation-denied", harness.reason ?? "Harness contract denied this run.");
+	return startRunMaybeWait(options, harness.graph, waitSeconds);
 }
 
 /** pi-subagents-compatible result fetch: wraps agent_team run_status (or step_result for one step). */
