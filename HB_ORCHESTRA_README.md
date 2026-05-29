@@ -10,7 +10,11 @@ Fork of `pi-multiagent` (Tiziano-AI/pi-multiagent v0.10.0) with extended product
 
 **v0.5.0-pre** — foundation in progress. Implementation slices land in `extensions/orchestra/`.
 
-Spec: see [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the 8 invariants, 6-layer architecture, 7 anti-patterns, and roadmap.
+- Spec / design lock: [`ARCHITECTURE.md`](./ARCHITECTURE.md) — 8 invariants, 6-layer architecture, 7 anti-patterns.
+- Roadmap: [`ROADMAP.md`](./ROADMAP.md).
+- **What actually exists vs planned: [`docs/hb-orchestra-status.md`](./docs/hb-orchestra-status.md)** — the single source of truth tying docs → code → tests.
+
+Implemented today: Layer 1 (agent-registry), Layer 2 (profile-engine composition), Layer 3 (profile→detached-graph mapping), and a Layer 6 minimal slice (`Agent` tool + `/agent` command). Everything else below is a v0.5 target, not a shipped feature.
 
 ---
 
@@ -24,14 +28,15 @@ Tiziano's `pi-multiagent` has deliberate design boundaries:
 
 These are reasonable choices for his package. They are not what we need for our daily workflow. `hb-orchestra` keeps the rock-solid detached substrate Tiziano built and adds:
 
-| Feature | Source / Status |
-|---------|-----------------|
-| `Agent()` tool surface (pi-subagents-compatible) | NEW in v0.5 |
-| `/agent`, `/profile` slash commands | NEW in v0.5 |
-| `.pi/agents/<name>.md` persona reader (with `model + fallbackModels`) | NEW in v0.5 |
-| `.pi/profiles/<name>.{json|md}` profile composition (chain / parallel) | NEW in v0.5 |
-| Reproducibility ledger (run manifest, replay) | NEW in v0.5 |
-| Harness contracts (read-only `.pi/harness/` opt-in) | NEW in v0.5 |
+| Feature | Status |
+|---------|--------|
+| `Agent()` tool surface (pi-subagents-compatible) | Implemented today (detached/background; foreground wait pending) |
+| `/agent` slash command | Implemented today |
+| `/profile` slash command | Target v0.5 (L2/L3 logic done, not yet wired) |
+| `.pi/agents/<name>.md` persona reader (with `model + fallbackModels`) | Implemented today |
+| `.pi/profiles/<name>.{json|md}` profile composition (chain / parallel) | Implemented today (composition + graph mapping; not yet command-invokable) |
+| Reproducibility ledger (run manifest, replay) | Target v0.5 (not started) |
+| Harness contracts (read-only `.pi/harness/` opt-in) | Target v0.5 (not started) |
 | Detached agent_team graph runtime | Inherited from pi-multiagent |
 | Worktree isolation (with uncommitted-loss + step.cwd fixes) | Inherited + locally fixed |
 | Persistent state + reattach | Inherited (B1a + B1b) |
