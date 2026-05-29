@@ -1,0 +1,13 @@
+{
+  "_comment": "Example hb-orchestra harness contract. Place at .pi/harness/contract.json (project) or .agents/harness/contract.json (workspace). hb-orchestra reads this read-only (ARCHITECTURE I6); it never writes harness files. All fields are optional; field names mirror the plan-packet scope/approval_gate/artifact_readiness blocks.",
+  "mutationAllowed": false,
+  "mutationScope": "none",
+  "allowedPaths": ["lux/native-cli/**"],
+  "forbiddenPaths": [".pi/**", ".agents/harness/**"],
+  "externalSideEffectsAllowed": false,
+  "approvalGateRequired": true,
+  "reviewGateRequired": true,
+  "artifactReadyBeforeReview": true,
+  "systemPromptFiles": ["policies/coding-rules.md"],
+  "planPacketPath": "templates/plan-packet.yaml"
+}

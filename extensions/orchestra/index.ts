@@ -11,6 +11,8 @@
  *   - Optional `waitSeconds` on `Agent`/`Profile`: bounded foreground wait that returns the
  *     finished result inline, still returning the runId on timeout (ARCHITECTURE I1: never blocks
  *     the parent indefinitely).
+ *   - `/harness`: read-only discovery of an optional project/workspace harness contract (Layer 4;
+ *     ARCHITECTURE I6 — reads `.pi/harness/` or `.agents/harness/`, never writes).
  *
  * Both resolve a `.pi/agents/<name>.md` persona via Layer 1, map it to a single
  * inline-step detached graph via the Layer 6 pure mapper, and start it through
@@ -37,6 +39,7 @@ import type { AgentTeamDetails, GraphSpecInput, ParentToolInfo, ParentToolInvent
 import { findPersona } from "./src/agent-registry/index.ts";
 import { agentInvocationToDetachedGraphStart, type AgentInvocation } from "./src/compat-surface/index.ts";
 import { profileToDetachedGraphStart } from "./src/execution-runtime/index.ts";
+import { findHarnessContract, summarizeHarnessContract } from "./src/harness-contracts/index.ts";
 import { findProfile, resolveProfile } from "./src/profile-engine/index.ts";
 
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -204,6 +207,15 @@ export default function orchestraExtension(pi: ExtensionAPI): void {
 		parameters: SteerSubagentSchema,
 		async execute(_toolCallId, params: SteerSubagentParams, signal, _onUpdate, ctx) {
 			return steerSubagent(pi, ctx, params, signal);
+		},
+	});
+
+	pi.registerCommand("harness", {
+		description: "Show the discovered read-only harness contract (.pi/harness or .agents/harness), if any.",
+		handler: async (_args, ctx) => {
+			const lookup = findHarnessContract({ invocationCwd: ctx.cwd });
+			const hasError = lookup.diagnostics.some((d) => d.severity === "error");
+			ctx.ui.notify(summarizeHarnessContract(lookup), hasError ? "error" : "info");
 		},
 	});
 }
