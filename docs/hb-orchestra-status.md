@@ -102,7 +102,7 @@ Known environmental caveats (pre-existing, not hb-orchestra regressions):
 
 - Architecture gate (ARCHITECTURE §7): **closed** — Mark approved I1–I8 (2026-05-28); GPT-5.5 review captured in the Stellar hb-orchestra documentation audit. Optional external second-opinion is not a blocker.
 - Roadmap gate 7.7 (Real-Pi smoke across 20+ Stellar personas via `Agent()` + `/agent`): **L6-minimal PASS (interactive)** — operator TTY run proved Load + `/agent` + `Agent` tool (incl. tools-override) + project-agent confirm + `run_status`/wait + child `succeeded` with a real review artifact (`coding_reviewer` on `phase8_receipt_verifier.rs`). See `docs/7.7-real-pi-smoke-receipt.md`. Remaining (optional breadth): repeat across the other 20+ personas before 7.8.
-- Roadmap gate 7.8 (remove `pi-subagents` + `taskplane`): **blocked** until 7.7 is fully green and a backup exists.
+- Roadmap gate 7.8 — **re-scoped 2026-05-29** (`docs/7.8-rescope.md`): `pi-subagents`+`pi-multiagent` (npm) removal is **done + validated** (already absent from the global config; personas use the openswarm bundle; the fork provides `Agent`/`agent_team`; backups under `~/.pi/agent/maintenance/pi-7.8-prep/`). `taskplane` removal is **deferred to fork v2** — the fork does not replace its supervisor/worker/merger (removing it breaks 4 personas + 2 skills). openswarm-bundled `pi-subagents` is a separate track. Consumer map: `~/.pi/agent/maintenance/pi-7.8-prep/7.8-CONSUMER-MAP-AND-PLAN.md`.
 
 ## L6 usage notes (operator)
 

@@ -12,8 +12,8 @@
 | 7.4 | L4 harness-contracts | ⏳ | Optional `.pi/harness/` / `.agents/harness/` reader. PlanPacket-lite, mutation-scope, artifact-ready, review-gate schemas. Read-only — package never writes to `.pi/harness/`. |
 | 7.5 | L5 reproducibility-ledger | ⏳ | Run manifest writer, run_hash compute, artifact mirror, replay engine. |
 | 7.6 | L6 compat-surface | 🟡 AGENT + /agent DONE | `Agent` tool + `/agent <persona> <task>` command resolve a persona (L1), map to a single-step detached graph (pure mapper, schema-valid + `resolveDetachedGraph`-plannable), and start via the inherited `agent_team` substrate (detached, returns runId). Pending: foreground inline-result wait, `get_subagent_result`, `steer_subagent`, `Profile()` + `/profile`. Real-Pi smoke is 7.7. |
-| 7.7 | — | ⏳ | Real-Pi smoke test: all 20+ Stellar personas via `Agent()` + `/agent` + `/profile`. |
-| 7.8 | — | ⏳ | Removal of `pi-subagents` + `taskplane` (only after 7.7 fully green + backup taken). |
+| 7.7 | — | 🟡 L6-minimal PASS | Real-Pi **interactive** smoke green: Load + `/agent` + `Agent` tool (incl. tools-override) + `run_status`/`cancel`, real `coding_reviewer` review. Optional breadth across remaining personas: `docs/7.7-breadth-checklist.md`. The `/profile` part stays pending (L2/L3 not yet command-wired). |
+| 7.8 | — | 🟢 pi-subagents done · 🔵 taskplane deferred | **Re-scoped 2026-05-29** (see `docs/7.8-rescope.md`). `pi-subagents`+`pi-multiagent` (npm) removal is **done + validated** (already absent from global config; personas use the openswarm bundle; fork provides `Agent`/`agent_team`; backups under `~/.pi/agent/maintenance/pi-7.8-prep/`). `taskplane` removal is **deferred to fork v2** — the fork does not replace its supervisor/worker/merger; removing it now breaks 4 personas + 2 skills. openswarm-bundled `pi-subagents` is a separate migration track. |
 
 ---
 
