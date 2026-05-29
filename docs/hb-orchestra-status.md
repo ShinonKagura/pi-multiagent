@@ -23,7 +23,8 @@ Legend: ✅ implemented + tested · 🟡 partial · ⏳ not started · ➖ defer
 | L5 reproducibility-ledger | run manifest writer, `run_hash`, artifact mirror, replay engine | ⏳ | — | — |
 | L6 compat-surface | `Agent` tool + `/agent <persona> <task>` command: persona → single-step detached graph → `agent_team` start (detached, returns runId) | 🟡 | `extensions/orchestra/src/compat-surface/{agent-graph,types,index}.ts`, `extensions/orchestra/index.ts` | `tests/orchestra-compat-surface.test.ts` (6) + load probe |
 | L6 compat-surface | `Profile` tool + `/profile <profile> <task>`: profile (L2) + member personas (L1) → detached chain/parallel graph (L3) → `agent_team` start (returns runId) | ✅ | `extensions/orchestra/index.ts` (`startProfileRun`) | `tests/orchestra-profile-command.test.ts` (3) + real-Pi probe |
-| L6 compat-surface | foreground inline-result wait, `get_subagent_result`, `steer_subagent` | ⏳ | — | — |
+| L6 compat-surface | `get_subagent_result` / `steer_subagent`: pi-subagents-compatible wrappers over `agent_team` run_status / message (auto-resolves the live step) | ✅ | `extensions/orchestra/index.ts` (`getSubagentResult`/`steerSubagent`/`resolveSteerStepId`) | `tests/orchestra-steer-step.test.ts` (4) + real-Pi probe |
+| L6 compat-surface | foreground inline-result wait | ⏳ | — | — |
 
 **Inherited & working today** (from `pi-multiagent` v0.10.0 substrate, unchanged): detached `agent_team` DAG runtime (`start`/`run_status`/`step_result`/`message`/`cancel`/`cleanup`), worktree isolation (F5 + local I1/I3 fixes), persistent run state + reattach (B1a/B1b), scheduling (NEU-C), artifact mirroring (G1), retention sweep (G3), `pi.events` lifecycle (G4).
 
@@ -37,8 +38,7 @@ Implemented now:
 - Both resolve a persona by name (model + thinking + tools + system prompt), build a single inline-step detached graph, and start it on the inherited substrate. The call returns immediately with a run receipt + `runId`.
 
 Not yet:
-- The call does **not** block and return the child's final answer inline (foreground wait). Inspect results with `agent_team run_status` / `step_result` using the returned `runId`.
-- No `get_subagent_result` / `steer_subagent` convenience wrappers yet (use `agent_team`).
+- The call does **not** block and return the child's final answer inline (foreground wait). Inspect results with `get_subagent_result` (or `agent_team run_status` / `step_result`) using the returned `runId`.
 
 (`Profile()` + `/profile` are now wired: L2 `resolveProfile` + L1 personas → L3 `profileToDetachedGraphStart` → `agent_team` start. Inspect the returned `runId` like any `Agent` run.)
 
