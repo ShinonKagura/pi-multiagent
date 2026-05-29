@@ -13,6 +13,8 @@
  *     the parent indefinitely).
  *   - `/harness`: read-only discovery of an optional project/workspace harness contract (Layer 4;
  *     ARCHITECTURE I6 — reads `.pi/harness/` or `.agents/harness/`, never writes).
+ *   - run_hash on each `Agent`/`Profile` start: a deterministic reproducibility fingerprint over the
+ *     composed inputs, emitted as a `hb-orchestra:run-hash` event and appended to the start result (Layer 5).
  *
  * Both resolve a `.pi/agents/<name>.md` persona via Layer 1, map it to a single
  * inline-step detached graph via the Layer 6 pure mapper, and start it through
@@ -41,6 +43,7 @@ import { agentInvocationToDetachedGraphStart, type AgentInvocation } from "./src
 import { profileToDetachedGraphStart } from "./src/execution-runtime/index.ts";
 import { findHarnessContract, summarizeHarnessContract } from "./src/harness-contracts/index.ts";
 import { findProfile, resolveProfile } from "./src/profile-engine/index.ts";
+import { composedInputsFromGraph, computeRunHash } from "./src/reproducibility-ledger/index.ts";
 
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const packageAgentsDir = join(packageRoot, "agents");
@@ -314,19 +317,32 @@ export function clampForegroundWaitSeconds(waitSeconds: number | undefined): num
  * runId so the parent can inspect later with get_subagent_result. */
 async function startRunMaybeWait(options: AgentTeamRuntimeOptions, graph: GraphSpecInput, waitSeconds?: number): Promise<AgentToolResult<AgentTeamDetails>> {
 	const started = await runAgentTeam({ action: "start", graph }, options);
-	const cap = clampForegroundWaitSeconds(waitSeconds);
-	if (cap === undefined || started.details?.ok === false) return started;
+	if (started.details?.ok === false) return started;
+	// Layer 5: deterministic reproducibility fingerprint over the composed inputs we launched.
+	const runHash = computeRunHash(composedInputsFromGraph(graph));
 	const runId = started.details?.run?.runId;
-	if (!runId || started.details?.run?.terminal === true) return started;
+	if (runId) {
+		try {
+			options.emitLifecycleEvent?.("hb-orchestra:run-hash", { runId, runHash });
+		} catch {
+			/* best-effort: reproducibility fingerprint is observability, never load-bearing */
+		}
+	}
+	const cap = clampForegroundWaitSeconds(waitSeconds);
+	if (cap === undefined || !runId || started.details?.run?.terminal === true) return appendRunHashNote(started, runHash);
 	const deadline = Date.now() + cap * 1000;
 	let last = started;
 	while (Date.now() < deadline) {
 		const remaining = Math.ceil((deadline - Date.now()) / 1000);
 		const chunk = Math.max(1, Math.min(remaining, RUN_STATUS_WAIT_CHUNK_SECONDS));
 		last = await runAgentTeam({ action: "run_status", runId, waitSeconds: chunk, preview: true }, options);
-		if (last.details?.ok === false || last.details?.run?.terminal === true) return last;
+		if (last.details?.ok === false || last.details?.run?.terminal === true) break;
 	}
-	return last;
+	return appendRunHashNote(last, runHash);
+}
+
+export function appendRunHashNote(result: AgentToolResult<AgentTeamDetails>, runHash: string): AgentToolResult<AgentTeamDetails> {
+	return { ...result, content: [...(result.content ?? []), { type: "text" as const, text: `[hb-orchestra] run_hash=${runHash}` }] };
 }
 
 function buildRuntimeOptions(pi: ExtensionAPI, ctx: ExtensionContext, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): AgentTeamRuntimeOptions {
