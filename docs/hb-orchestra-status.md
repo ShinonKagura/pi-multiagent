@@ -103,3 +103,22 @@ Known environmental caveats (pre-existing, not hb-orchestra regressions):
 - Architecture gate (ARCHITECTURE §7): **closed** — Mark approved I1–I8 (2026-05-28); GPT-5.5 review captured in the Stellar hb-orchestra documentation audit. Optional external second-opinion is not a blocker.
 - Roadmap gate 7.7 (Real-Pi smoke across 20+ Stellar personas via `Agent()` + `/agent`): **L6-minimal PASS (interactive)** — operator TTY run proved Load + `/agent` + `Agent` tool (incl. tools-override) + project-agent confirm + `run_status`/wait + child `succeeded` with a real review artifact (`coding_reviewer` on `phase8_receipt_verifier.rs`). See `docs/7.7-real-pi-smoke-receipt.md`. Remaining (optional breadth): repeat across the other 20+ personas before 7.8.
 - Roadmap gate 7.8 (remove `pi-subagents` + `taskplane`): **blocked** until 7.7 is fully green and a backup exists.
+
+## L6 usage notes (operator)
+
+Confirmed during the 7.7 interactive smoke; these are correct behaviors, not bugs:
+
+1. **bash-capable personas via `Agent()` / `/agent`.** A persona that declares `bash` in its `tools`
+   makes the mapper derive `allowShellTools`, and the substrate fail-closes a shell-capable child whose
+   cwd contains a project-controlled `.pi/settings.json` (`bash-project-settings-denied` — a HARD_RULES
+   trust-boundary). To run such a persona you must either (a) drop bash via the `Agent` tool
+   `tools:["read","grep","find","ls"]` override (the `/agent` slash command cannot pass a tools
+   override), (b) grant explicit project-code trust, or (c) use a cwd without project `.pi/settings.json`.
+2. **Model resolution for breadth tests.** A persona with no frontmatter `model` falls back to the
+   session default model; if that default is not resolvable in the child it 404s (e.g. `reviewer` fell
+   back to an unavailable `claude-3-5-haiku-latest`). When sweeping 20+ personas, either pin each
+   persona's frontmatter `model` or launch with a `--model` whose provider/model resolves in the child,
+   to avoid r1-style 404s that look like failures but are only model resolution. (Active
+   `fallbackModels` resolution is a v0.7 item; today fallbacks are captured-only.)
+3. **Launch:** use Option C (disable the conflicting `npm:pi-multiagent` + `@tintinweb/pi-subagents`,
+   then run pi normally with the fork via `-e`). `--no-extensions` breaks interactive startup.
