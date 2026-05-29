@@ -5,19 +5,29 @@ import { test, before, after } from "node:test";
 import { resolveDetachedGraph } from "../extensions/multiagent/src/planning.ts";
 import { DetachedRun } from "../extensions/multiagent/src/detached-run.ts";
 import { unavailableTools } from "../extensions/multiagent/src/runtime-options.ts";
+import { fakeSpawn } from "./fake-rpc-child.ts";
 
 let originalStateDir: string | undefined;
+let originalLauncher: string | undefined;
 
 before(() => {
 	originalStateDir = process.env.PI_MULTIAGENT_STATE_DIR;
-	// Point persistence at an unwritable path to force createPersistentRun to return undefined
-	process.env.PI_MULTIAGENT_STATE_DIR = `/proc/1/cannot-write-${Date.now()}`;
+	// Force createPersistentRun to fail fast: point the state dir UNDER a non-directory (/dev/null) so
+	// mkdir returns ENOTDIR immediately on every environment. (The previous /proc/1 path failed fast on
+	// a normal CI runner but BLOCKED in some sandboxed runners, hanging the suite.)
+	process.env.PI_MULTIAGENT_STATE_DIR = "/dev/null/cannot-write";
+	// The non-worktree "running" case reaches getPiInvocation; pin a resolvable launcher so a clean CI
+	// runner without pi on PATH does not throw (the fake spawn means it is never actually executed).
+	originalLauncher = process.env.PI_MULTIAGENT_PI_LAUNCHER;
+	process.env.PI_MULTIAGENT_PI_LAUNCHER = process.execPath;
 });
 
 after(() => {
 	if (originalStateDir === undefined)
 		delete process.env.PI_MULTIAGENT_STATE_DIR;
 	else process.env.PI_MULTIAGENT_STATE_DIR = originalStateDir;
+	if (originalLauncher === undefined) delete process.env.PI_MULTIAGENT_PI_LAUNCHER;
+	else process.env.PI_MULTIAGENT_PI_LAUNCHER = originalLauncher;
 });
 
 const baseCtx = {
@@ -53,6 +63,9 @@ const runtimeOptsBase = {
 	},
 	signal: undefined,
 	onUpdate: undefined,
+	// Never spawn a real pi child: the non-worktree "running" path completes a step against an
+	// in-memory fake child so the suite stays hermetic and exits cleanly.
+	spawnProcess: fakeSpawn("success"),
 };
 
 test("FIX-1: worktree-isolated step + unavailable persistence → run is failed at construction with persistent-run-unavailable-with-worktree", () => {

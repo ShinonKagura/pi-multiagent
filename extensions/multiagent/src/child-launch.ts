@@ -71,6 +71,11 @@ function skillArgs(agent: ResolvedAgent): string[] {
 
 export function getPiInvocation(args: string[], cwd: string): { command: string; args: string[] } {
 	const deniedRoots = findDeniedRoots(cwd);
+	// Explicit launcher override (absolute, executable, trusted path). Lets a known pi launcher be
+	// pinned for deployments/tests/CI where argv[1]/PATH discovery does not apply (e.g. a clean runner
+	// with no pi on PATH). Subject to the same trust checks as discovered launchers.
+	const launcherOverride = process.env.PI_MULTIAGENT_PI_LAUNCHER;
+	if (launcherOverride && isAbsolute(launcherOverride) && isExecutableFile(launcherOverride) && isTrustedLaunchPath(deniedRoots, launcherOverride)) return { command: launcherOverride, args };
 	const currentScript = process.argv[1];
 	const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/") ?? false;
 	const currentScriptPath = currentScript && !isBunVirtualScript ? resolve(currentScript) : undefined;

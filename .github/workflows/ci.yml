@@ -41,14 +41,12 @@ jobs:
           --loader ./tests/pi-peer-loader.mjs
           --test tests/orchestra-*.test.ts
 
-      # Informational: the inherited multiagent substrate suite (everything except the orchestra
-      # layer above and the quarantined worktree-interlock hang). Stale-expectation debt is fixed, but
-      # a few tests still spawn a REAL pi launcher (e.g. rpc-child-controller-unref) which a clean CI
-      # runner has no pi on PATH for. Kept non-blocking until those are switched to a fake launcher or
-      # CI installs pi. Tracked in docs/ROAD-TO-V1.md.
-      - name: Test — inherited substrate suite (informational)
-        continue-on-error: true
+      # Required gate 3: the full inherited multiagent substrate suite (everything except the
+      # orchestra layer already run above). Real-pi-launcher coupling is resolved via fake spawns +
+      # the PI_MULTIAGENT_PI_LAUNCHER override (tests/fake-rpc-child.ts), and the worktree-interlock
+      # hang is fixed (its state dir now fails fast everywhere). 287 tests green.
+      - name: Test — inherited substrate suite
         run: |
-          files=$(ls tests/*.test.ts | grep -v '/orchestra-' | grep -v 'worktree-isolation-persistence-interlock')
+          files=$(ls tests/*.test.ts | grep -v '/orchestra-')
           timeout 600 node --no-warnings --experimental-strip-types --test-timeout=60000 \
             --loader ./tests/pi-peer-loader.mjs --test $files

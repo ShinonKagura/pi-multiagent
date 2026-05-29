@@ -42,17 +42,15 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
     - [x] `examples` — `worktree-isolated-mutation.json` is treated as the one deliberate copy/adapt
       mutation TEMPLATE: exempt from the no-mutation rule (with an isolation-safety assertion) and
       from the runnable-resolve coverage (its placeholder mutationScope is denied until replaced). 5/5.
-    - [ ] **Remaining (real-pi-launcher coupling):** `worktree-isolation-persistence-interlock` (its
-      non-worktree sub-tests build a `DetachedRun` with no fake `spawnProcess` → spawns REAL children
-      → suite never exits) and `rpc-child-controller-unref` (spawns a real pi launcher; fails on a
-      clean CI runner with "Unable to resolve a trusted absolute pi launcher"). These pass LOCALLY
-      (pi on PATH) but not on a clean runner. Proper fix = a shared RPC fake-spawn/launcher harness
-      (currently a private ~150-line helper in `delegation.test.ts`); extract/share it, then these can
-      join the required gate. There may be other real-spawn tests with the same coupling.
-  - **Suite status: 44/45 green LOCALLY** (pi on PATH). On a clean CI runner the real-pi-launcher
-    tests above fail, so CI gate 3 (inherited substrate) stays **informational** (`continue-on-error`)
-    for now; the **required** gates are typecheck + the hb-orchestra layer (both env-independent and
-    green). Tightening gate 3 to required needs the fake-launcher harness or pi installed on CI.
+    - [x] `rpc-child-controller-unref` + `worktree-isolation-persistence-interlock` — the real-pi
+      coupling is gone: a shared `tests/fake-rpc-child.ts` provides `FakeRpcChild` + `fakeSpawn`, and
+      `getPiInvocation` now honors a trust-checked `PI_MULTIAGENT_PI_LAUNCHER` override so a clean
+      runner without pi on PATH resolves a (never-executed) launcher. The worktree hang was a fragile
+      `/proc/1` "unwritable path" that BLOCKED in sandboxed runners; switched to `/dev/null/...` which
+      fails fast (ENOTDIR) everywhere.
+  - **Suite status: 45/45 test files / 287 substrate tests green** under node+loader (orchestra layer
+    73/73 on top). CI gate 3 (full inherited substrate) is now a **required** green gate. All three
+    CI gates (typecheck + hb-orchestra layer + inherited substrate) are required and env-independent.
   - [ ] Document the canonical test command(s) in the README once the substrate suite is green.
 - **D2 [BLOCKER]** CI pipeline. _Done (first iteration) 2026-05-29:_ `.github/workflows/ci.yml` runs
   on push/PR to `hb-orchestra-v0.5`/`main`: `pnpm install --no-frozen-lockfile` (repo gitignores

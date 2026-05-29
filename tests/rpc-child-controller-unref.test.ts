@@ -1,12 +1,24 @@
 import { strict as assert } from "node:assert";
 import { EventEmitter } from "node:events";
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 import { PassThrough, Writable } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { RpcChildController } from "../extensions/multiagent/src/rpc-child-controller.ts";
 import type { SpawnOptions } from "../extensions/multiagent/src/child-launch.ts";
 import type { RpcJsonRecord } from "../extensions/multiagent/src/rpc-jsonl.ts";
 import type { RpcChildControllerOptions } from "../extensions/multiagent/src/rpc-child-types.ts";
+
+let originalLauncher: string | undefined;
+before(() => {
+	// getPiInvocation resolves a launcher before the injected fake spawn runs; pin a resolvable one so
+	// a clean CI runner without pi on PATH does not throw. The fake child is never actually executed.
+	originalLauncher = process.env.PI_MULTIAGENT_PI_LAUNCHER;
+	process.env.PI_MULTIAGENT_PI_LAUNCHER = process.execPath;
+});
+after(() => {
+	if (originalLauncher === undefined) delete process.env.PI_MULTIAGENT_PI_LAUNCHER;
+	else process.env.PI_MULTIAGENT_PI_LAUNCHER = originalLauncher;
+});
 
 class FakeRpcChild extends EventEmitter {
 	readonly stdout = new PassThrough();
