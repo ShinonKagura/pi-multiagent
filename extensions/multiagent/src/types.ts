@@ -285,6 +285,10 @@ export interface ResolvedExtensionToolGrant {
 interface GraphStepAgentSharedInput {
 	tools?: string[];
 	extensionTools?: ExtensionToolGrantSpec[];
+	/** Optional child model lane override. For inline agents, this is the only source of child model metadata. */
+	model?: string;
+	/** Optional child thinking lane override. `inherit` means use parent defaults. */
+	thinking?: ThinkingLevel;
 }
 
 export interface GraphStepAgentInput extends GraphStepAgentSharedInput {
