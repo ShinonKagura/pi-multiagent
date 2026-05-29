@@ -23,7 +23,7 @@
 - `pi.events` lifecycle events (`hb-orchestra:run-started/completed/failed/canceled`)
 - Cross-extension RPC compat (`subagents:rpc:spawn|stop|ping` reply envelopes)
 - Conversation viewer overlay (terminal-rendered, no web yet)
-- I2 r1-collision full fix (proper `<pid>-<runId>` namespace; v0.5 only has detection-defense)
+- I2 r1-collision: common case FIXED (runId serial seeded past the highest persisted run dir so a fresh process never reuses an orphan's id; sequential processes verified r1->r2). Optional remaining hardening: a full `<pid>-<runId>` namespace for truly concurrent same-machine processes.
 
 ---
 

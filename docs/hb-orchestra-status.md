@@ -78,9 +78,14 @@ The first real-Pi (`pi --print`, v0.77.0) smoke from the Stellar workspace found
   and tracks to `terminal=true`.
 
 Still open:
-- **OPEN-2 (latent)** — per-process runId namespace (`r1,r2,...`) collides across Pi processes;
-  already tracked as ROADMAP v0.7 I2 (detection-defense only for now).
-- **Project-agent personas** (e.g. project `.pi/agents/coding_reviewer.md`) require interactive UI
+- **OPEN-2 (FIXED 2026-05-29 for the common case)** — per-process runId serials (`r1,r2,...`) used to
+  restart at r1 each process and collide with an orphaned r1 still on disk (createPersistentRun refused
+  the foreign-pid dir → run failed). The serial is now lazily seeded past the highest persisted run dir
+  (`seedRunIdSerialFromDisk` / `highestPersistedRunIdSerial` in `delegation.ts`), so a fresh process
+  allocates above all orphans. Verified: two sequential processes -> r1 then r2, no collision. Residual
+  edge: truly concurrent same-machine processes can still race the same seed (the createPersistentRun
+  foreign-pid guard catches it); a full `<pid>`-namespaced id remains an optional v0.7 hardening.
+- **Project-agent personas (still open)** (e.g. project `.pi/agents/coding_reviewer.md`) require interactive UI
   confirmation ("Load project agents?", fail-closed library policy). Headless `--print` is denied by
   design; the interactive operator TTY run prompts and proceeds.
 

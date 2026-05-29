@@ -291,8 +291,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const MAX_RUN_ID_SERIAL = 9_999_999;
 let nextRunIdSerial = 1;
+let runIdSerialSeeded = false;
+
+/** Highest `rN` serial among the given runIds (0 if none). Pure, for deterministic testing. */
+export function highestPersistedRunIdSerial(runIds: readonly string[]): number {
+	let highest = 0;
+	for (const runId of runIds) {
+		const match = /^r([1-9][0-9]*)$/.exec(runId);
+		if (match) {
+			const serial = Number(match[1]);
+			if (serial > highest) highest = serial;
+		}
+	}
+	return highest;
+}
+
+/** OPEN-2: runIds are process-local (`r1`, `r2`, ...) but persistent run dirs survive across
+ * processes. Without seeding, a fresh process restarts at r1 and collides with an orphaned r1 on
+ * disk — createPersistentRun refuses the foreign-pid dir and the run fails. Seed the serial past the
+ * highest run already persisted so new runs never reuse an orphan's id. Lazy + best-effort. */
+function seedRunIdSerialFromDisk(): void {
+	if (runIdSerialSeeded) return;
+	runIdSerialSeeded = true;
+	try {
+		const highest = highestPersistedRunIdSerial(listPersistedRuns().map((listing) => listing.runId));
+		if (highest >= nextRunIdSerial) nextRunIdSerial = highest + 1;
+	} catch {
+		/* best-effort: fall back to in-memory-only allocation */
+	}
+}
 
 function createRunId(): string | undefined {
+	seedRunIdSerialFromDisk();
 	while (nextRunIdSerial <= MAX_RUN_ID_SERIAL) {
 		const candidate = `r${nextRunIdSerial}`;
 		nextRunIdSerial += 1;
