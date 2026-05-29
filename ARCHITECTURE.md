@@ -306,8 +306,8 @@ v2.0 — Orchestrator parity
 Before any code in this package changes for v0.5 implementation:
 
 1. ✅ This ARCHITECTURE.md exists and is reviewed
-2. ⏳ Mark approves invariants I1-I8 (or proposes amendments)
-3. ⏳ GPT-5.5 reviews ARCHITECTURE.md against his audit findings
-4. ⏳ Optional: claude-sonnet-4-6 second-opinion
+2. ✅ Mark approved invariants I1-I8 on 2026-05-28
+3. ✅ GPT-5.5 review completed on 2026-05-28; corrections captured in the hb-orchestra documentation audit
+4. ➖ Optional: claude-sonnet-4-6 second-opinion remains available but is not a v0.5 blocker
 
-Implementation phases begin only after these gates close.
+Implementation may proceed in roadmap order. Keep I1/I2/I6/I8 as hard constraints: agent execution remains detached/non-blocking, pi-subagents-compatible callers keep working until old references are removable after parity smoke, harness paths are read-only, and namespace boundaries stay explicit.

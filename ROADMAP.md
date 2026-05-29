@@ -6,9 +6,9 @@
 |-------|-------|--------|-------|
 | PRE-7 | — | ✅ DONE | ARCHITECTURE.md with 8 invariants + 6-layer model + 7 anti-patterns |
 | 7.0 | — | ✅ IN PROGRESS | Fork + rename `pi-multiagent` → `hb-orchestra`, branch + package.json + README |
-| 7.1 | L1 agent-registry | ⏳ SKELETON | `.pi/agents/<name>.md` reader (frontmatter + body parse). v0.5 smoke-test green: loads `stellar/.pi/agents/coding_reviewer.md` with all 14 frontmatter fields including `model + fallbackModels + tools + extensions + inheritProjectContext + systemPromptMode`. Pending: list-all, fuzzy match. |
-| 7.2 | L2 profile-engine | ⏳ NEXT | Compose ResolvedAgentProfile from persona + model + tools + skills + context-policy. Chain/parallel composition for `.pi/profiles/`. |
-| 7.3 | L3 execution-runtime | ⏳ | Wire L1+L2 to `agent_team` graph runtime (inherited from pi-multiagent). |
+| 7.1 | L1 agent-registry | ✅ DONE + smoke coverage verified | `.pi/agents/<name>.md` reader with frontmatter + body parse, four-path catalog, case-insensitive lookup, unique fuzzy lookup, shape validation, and v0.5 smoke coverage for `stellar/.pi/agents/coding_reviewer.md` with all 14 frontmatter fields including `model + fallbackModels + tools + extensions + inheritProjectContext + systemPromptMode`. |
+| 7.2 | L2 profile-engine | ✅ COMPOSITION DONE | `.pi/profiles/<name>.{json|md}` contracts, loader, case-insensitive lookup, listAllProfiles, shape validation, and pure `resolveProfile()` composition are implemented. Resolves profile agents via injected Layer-1 persona lookup and merges persona defaults with profile overrides for model, fallbackModels, tools, thinking, context, skills, max_turns, and shared system prompt. |
+| 7.3 | L3 execution-runtime | ✅ GRAPH MAPPING DONE | Pure `profileToDetachedGraphStart()` maps resolved profiles to schema-valid detached `agent_team` start graphs with chain/parallel dependencies, inferred authority, model/thinking lane preservation, and mutation-scope validation. Tool/slash-command registration remains L6. |
 | 7.4 | L4 harness-contracts | ⏳ | Optional `.pi/harness/` / `.agents/harness/` reader. PlanPacket-lite, mutation-scope, artifact-ready, review-gate schemas. Read-only — package never writes to `.pi/harness/`. |
 | 7.5 | L5 reproducibility-ledger | ⏳ | Run manifest writer, run_hash compute, artifact mirror, replay engine. |
 | 7.6 | L6 compat-surface | ⏳ | `Agent()` tool + `get_subagent_result` + `steer_subagent`. `/agent` + `/profile` slash commands. |
