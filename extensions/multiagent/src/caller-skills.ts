@@ -58,6 +58,7 @@ export function resolveAgentCallerSkills(input: {
 	tools: string[];
 	label: string;
 	path: string;
+	allowProjectCode?: boolean;
 	diagnostics: AgentDiagnostic[];
 	context: CallerSkillResolutionContext | undefined;
 }): ResolvedCallerSkill[] | undefined {

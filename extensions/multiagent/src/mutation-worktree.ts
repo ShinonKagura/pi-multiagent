@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { writeRunArtifact, type RunArtifactStore } from "./background-artifacts.ts";
 import type { MutationWorktreeState, WorktreeSetupSpec, WorktreeTeardownEvidence } from "./types.ts";
+export type { MutationWorktreeState } from "./types.ts";
 
 /**
  * Strict guarantee: either returns a valid MutationWorktreeState whose worktreePath

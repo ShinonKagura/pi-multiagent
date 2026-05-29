@@ -10,10 +10,11 @@ import type {
 	CatalogAgentSummary,
 	LibraryOptions,
 	LibrarySource,
+	ProjectAgentsPolicy,
 } from "./types.ts";
 import { readAgentFileContent } from "./agent-file-content.ts";
 import { parseAgentTags, parseMarkdownFrontmatter, splitFrontmatterList } from "./agent-frontmatter.ts";
-import { DEFAULT_LIBRARY_SOURCES, LIBRARY_SOURCE_VALUES, TOOL_NAME_PATTERN } from "./types.ts";
+import { DEFAULT_LIBRARY_SOURCES, DEFAULT_PROJECT_AGENTS_POLICY, LIBRARY_SOURCE_VALUES, TOOL_NAME_PATTERN } from "./types.ts";
 import { validateToolNames } from "./tool-policy.ts";
 import { findNearestProjectDir, getGlobalPiDir, isContainedPath, safeRealpath } from "./project-root.ts";
 
@@ -215,11 +216,13 @@ export function getDefaultUserAgentsDir(env: NodeJS.ProcessEnv = process.env): s
 export function normalizeLibraryOptions(input: {
 	sources?: LibrarySource[];
 	query?: string;
+	projectAgents?: ProjectAgentsPolicy;
 } | undefined): LibraryOptions {
 	const sources = input?.sources && input.sources.length > 0 ? dedupeSources(input.sources) : DEFAULT_LIBRARY_SOURCES;
 	return {
 		sources,
 		query: normalizeQuery(input?.query),
+		projectAgents: input?.projectAgents ?? DEFAULT_PROJECT_AGENTS_POLICY,
 	};
 }
 
@@ -261,6 +264,7 @@ export function discoverAgents(options: {
 		userAgentsDir,
 		projectAgentsDir,
 		sources: activeSources,
+		projectAgents: options.library.projectAgents,
 	};
 }
 

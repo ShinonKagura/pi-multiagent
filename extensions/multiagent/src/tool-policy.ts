@@ -4,6 +4,7 @@ import type {
 	AgentDiagnostic,
 	CatalogExtensionToolSummary,
 	ExtensionToolGrantSpec,
+	ExtensionToolPolicy,
 	ParentToolInfo,
 	ParentToolInventory,
 	ParentToolSourceInfo,
@@ -20,6 +21,8 @@ const MAX_CHILD_TOOL_NAMES = 24;
 
 export interface ToolResolutionContext {
 	parentTools: ParentToolInventory;
+	extensionToolPolicy?: ExtensionToolPolicy;
+	cwd?: string;
 }
 
 export interface ResolvedAgentToolAccess {
@@ -35,7 +38,7 @@ export function childToolNames(agent: { tools: string[]; extensionTools: { name:
 	return dedupeStrings([...agent.tools, ...agent.extensionTools.map((tool) => tool.name)]);
 }
 
-export function catalogParentExtensionTools(inventory: ParentToolInventory | undefined): CatalogExtensionToolSummary[] {
+export function catalogParentExtensionTools(inventory: ParentToolInventory | undefined, _cwd?: string): CatalogExtensionToolSummary[] {
 	if (!inventory?.apiAvailable) return [];
 	const activeNameCounts = countActiveToolNames(inventory.tools);
 	return inventory.tools

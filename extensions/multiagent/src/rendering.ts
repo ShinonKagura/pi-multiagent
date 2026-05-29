@@ -66,6 +66,15 @@ export function formatAgentTeamNoticeText(details: AgentTeamDetails | undefined)
 	return formatAgentTeamPlainCard(details).join("\n");
 }
 
+/** One-line status summary of the currently live agent_team runs (for ctx.ui.setStatus). */
+export function formatAgentTeamLiveStatus(liveRuns: AgentTeamDetails[]): string {
+	const runs = liveRuns.map((details) => details.run).filter((run): run is RunSnapshot => run !== undefined);
+	if (runs.length === 0) return "";
+	const [first] = runs;
+	if (runs.length === 1 && first) return `agent_team ${shortRunId(first.runId)} ${humanRunStatus(first.status)} · ${liveProgressSummary(first.counts)}`;
+	return `agent_team ${runs.length} runs live · ${runs.map((run) => shortRunId(run.runId)).join(", ")}`;
+}
+
 export function formatAgentTeamCard(details: AgentTeamDetails, theme: Theme, options: CardOptions): string[] {
 	if (details.action === "catalog") return formatCatalog(details, theme);
 	if (hasCleanupReceipt(details)) return formatCleanupReceipt(details, theme, options.includeAction);
