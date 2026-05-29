@@ -41,11 +41,10 @@ jobs:
           --loader ./tests/pi-peer-loader.mjs
           --test tests/orchestra-*.test.ts
 
-      # Informational only: the inherited multiagent substrate suite. Has known pre-existing test
-      # debt (stale authority/wording expectations + a slow worktree interlock test) tracked in
-      # docs/ROAD-TO-V1.md. continue-on-error keeps it from blocking the gate until that debt is paid.
-      - name: Test — inherited substrate suite (informational)
-        continue-on-error: true
+      # Required gate 3: the inherited multiagent substrate suite (everything except the orchestra
+      # layer above and the one quarantined worktree-interlock test, which spawns real child
+      # processes and needs the shared RPC fake-spawn harness — tracked in docs/ROAD-TO-V1.md).
+      - name: Test — inherited substrate suite
         run: |
           files=$(ls tests/*.test.ts | grep -v '/orchestra-' | grep -v 'worktree-isolation-persistence-interlock')
           timeout 600 node --no-warnings --experimental-strip-types --test-timeout=60000 \
