@@ -57,8 +57,12 @@ The first real-Pi (`pi --print`, v0.77.0) smoke from the Stellar workspace found
   passed no `subagentSkills` config, so `readSubagentSkillConfig(undefined)` defaulted to `enabled`
   → all ~120 caller skills propagated → `MAX_CALLER_SKILLS` (128) tripped → child never started.
   The `--agent-team-subagent-skills` flag does not help because orchestra's separate `ExtensionAPI`
-  cannot read a flag registered by the multiagent extension. Fixed by defaulting the compat surface
-  to `disabled` (pi-subagents semantics) while still honoring the flag if readable.
+  cannot read a flag registered by the multiagent extension. Fixed by hard-defaulting the compat
+  surface to `disabled` (pi-subagents semantics: children do not inherit caller skills). **Known
+  limitation:** the operator `--agent-team-subagent-skills` flag does NOT affect `/agent` yet — only
+  `disabled` short-circuits the cap, while `auto`/`enabled` both hard-error over the cap in the
+  `resolveDetachedGraph` path (no auto soft-fallback there). Honoring the operator flag needs orchestra
+  to register the flag itself (tracked follow-up), so it is intentionally deferred for v0.5-minimal.
 - **OPEN-1 — `agent_team run_status` now finds orchestra-started runs.** `detached-registry.ts`
   held a module-local `Map`; loading orchestra + multiagent as two `-e` extensions created two
   module instances → split-brain registry (orchestra registered runs that `run_status` /

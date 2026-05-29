@@ -114,11 +114,15 @@ async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 }
 
 function buildRuntimeOptions(pi: ExtensionAPI, ctx: ExtensionContext, signal: AbortSignal | undefined, onUpdate: AgentToolUpdateCallback<AgentTeamDetails> | undefined): AgentTeamRuntimeOptions {
-	// The agent-team-subagent-skills flag is registered by the multiagent extension; orchestra's
-	// separate ExtensionAPI cannot read it (getFlag returns undefined), and the readSubagentSkillConfig
-	// default is "enabled" which propagates every caller skill and trips MAX_CALLER_SKILLS. Default the
-	// compat surface to "disabled" (pi-subagents semantics: children do not inherit caller skills) while
-	// still honoring the operator flag if it is readable.
+	// Hard-default the compat surface to "disabled" (pi-subagents semantics: child agents do not inherit
+	// caller skills). Rationale: readSubagentSkillConfig(undefined) defaults to "enabled", which propagates
+	// every caller skill and trips MAX_CALLER_SKILLS, so /agent fails in any skill-rich session. Only
+	// "disabled" short-circuits the cap (resolveAgentCallerSkills); "auto" and "enabled" both hard-error
+	// over the cap in the resolveDetachedGraph path (there is no auto soft-fallback here).
+	// KNOWN LIMITATION: the operator --agent-team-subagent-skills flag does NOT affect /agent. That flag
+	// is registered by the multiagent extension and orchestra's separate ExtensionAPI returns undefined
+	// from getFlag, so the value is never read here. The getFlag read is retained only so honoring the
+	// flag becomes automatic IF orchestra later registers it itself (tracked as a follow-up).
 	const subagentSkills = readSubagentSkillConfig(pi.getFlag(SUBAGENT_SKILLS_FLAG) ?? "disabled");
 	return {
 		cwd: ctx.cwd,
