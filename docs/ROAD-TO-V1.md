@@ -107,8 +107,12 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
 
 ## Block C — v1.0 release engineering (the explicit v1.0 contract)
 
-- [ ] **C1 [BLOCKER]** Freeze the public API: stable, semver'd contracts for the Agent surface, the
-  Profile schema, and the Manifest schema. No breaking changes after this.
+- [x] **C1** Public API frozen: `docs/API.md` documents the v1.0 semver contract (tools, slash
+  commands, persona/profile/harness schemas, graph authority keys, run_hash + replay manifest,
+  lifecycle events, cross-extension RPC). A machine-checked subset is guarded by
+  `tests/orchestra-api-contract.test.ts` (run_hash determinism, replay manifest field set +
+  schemaVersion, RPC channels, harness discovery surface, authority key set) so an accidental breaking
+  change trips CI. Linked from HB_ORCHESTRA_README.md.
 - [ ] **C2 [BLOCKER]** Migration guide from `pi-subagents` with concrete code-level mappings.
 - [ ] **C3 [BLOCKER]** README + cookbook + **20+ examples**: simple Agent, multi-model parallel, chain
   with artifact handoff, schedule, worktree-isolated, persona override.
