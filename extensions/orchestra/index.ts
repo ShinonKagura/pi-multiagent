@@ -298,7 +298,7 @@ async function startPersonaRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 		return errorResult(options, first?.code ?? "agent-invocation-invalid", first ? `${first.code}: ${first.message}` : "Agent invocation could not be mapped to a detached graph.");
 	}
 	const harness = applyHarnessContract(mapped.graph, ctx.cwd);
-	if (harness.blocked) return errorResult(options, "harness-mutation-denied", harness.reason ?? "Harness contract denied this run.");
+	if (harness.blocked) return errorResult(options, "harness-policy-denied", harness.reason ?? "Harness contract denied this run.");
 	return startRunMaybeWait(options, harness.graph, waitSeconds);
 }
 
@@ -317,7 +317,7 @@ async function startProfileRun(pi: ExtensionAPI, ctx: ExtensionContext, invocati
 		return errorResult(options, first?.code ?? "profile-invocation-invalid", first ? `${first.code}: ${first.message}` : "Profile could not be mapped to a detached graph.");
 	}
 	const harness = applyHarnessContract(mapped.graph, ctx.cwd);
-	if (harness.blocked) return errorResult(options, "harness-mutation-denied", harness.reason ?? "Harness contract denied this run.");
+	if (harness.blocked) return errorResult(options, "harness-policy-denied", harness.reason ?? "Harness contract denied this run.");
 	return startRunMaybeWait(options, harness.graph, waitSeconds);
 }
 

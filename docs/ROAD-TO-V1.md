@@ -64,8 +64,12 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
 
 ## Block A — Functional completeness (finish the layers)
 
-- [ ] **A1 [BLOCKER]** L4 path-allowlist / forbidden-path **enforcement** at tool-broker depth
-  (currently read into the contract but not enforced). Mutation gate + prompt injection already land.
+- [x] **A1** L4 path/scope governance **enforcement** landed: a planning-time forbidden-path gate
+  (blocks a mutating step whose declared `mutationScope` targets a contract `forbiddenPath`,
+  `harness-policy-denied`) + governance injection (allowedPaths/forbiddenPaths/mutationScope/
+  externalSideEffects appended to child prompts). Verified by 12 unit tests + a real-Pi block/allow
+  probe. Honest scope: planning + prompt tier, NOT an OS path sandbox — hard mutation confinement
+  remains worktree isolation's job (a deeper tool-broker sandbox is a possible later increment).
 - [ ] **A2 [opt]** Parse the full nested-YAML PlanPacket (Lite/pointer form is enough for the v1.0
   core).
 

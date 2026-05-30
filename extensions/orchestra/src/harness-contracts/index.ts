@@ -9,4 +9,4 @@ export type { HarnessContract, HarnessContractLookup, HarnessDiagnostic, Harness
 export { HARNESS_CONTRACT_FILENAMES, HARNESS_SEARCH_PATHS } from "./types.ts";
 export { findHarnessContract, summarizeHarnessContract } from "./contract-loader.ts";
 export type { HarnessApplication } from "./apply.ts";
-export { applyContractToGraph, applyHarnessContract, graphRequestsMutation } from "./apply.ts";
+export { applyContractToGraph, applyHarnessContract, buildHarnessPolicyText, forbiddenPathViolation, graphRequestsMutation } from "./apply.ts";
