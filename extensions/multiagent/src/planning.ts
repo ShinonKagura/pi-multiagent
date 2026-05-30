@@ -87,7 +87,7 @@ function resolveStepAgent(stepId: string, spec: GraphSpec["steps"][number]["agen
 		if (!toolAccess) return undefined;
 		const skills = resolveAgentCallerSkills({ mode: context.subagentSkillMode ?? DEFAULT_SUBAGENT_SKILL_MODE, tools: toolAccess.tools, label: `step agent ${stepId}`, path: `${path}/skills`, allowProjectCode: authority.allowProjectCode, diagnostics, context: skillContext });
 		if (!skills) return undefined;
-		return { id: stepId, ref: `inline:${stepId}`, name: stepId, kind: "inline", description: stepId, tools: toolAccess.tools, extensionTools: toolAccess.extensionTools, callerSkills: skills, systemPrompt, model: spec.model, thinking: normalizeStepThinking(spec.thinking), source: "inline", filePath: undefined, sha256: undefined };
+		return { id: stepId, ref: `inline:${stepId}`, name: stepId, kind: "inline", description: stepId, tools: toolAccess.tools, extensionTools: toolAccess.extensionTools, callerSkills: skills, systemPrompt, model: spec.model, fallbackModels: spec.fallbackModels, thinking: normalizeStepThinking(spec.thinking), source: "inline", filePath: undefined, sha256: undefined };
 	}
 	diagnostics.push(makeDiagnostic("step-agent-invalid", "Step agent requires either system or ref.", "error", path));
 	return undefined;
@@ -125,7 +125,7 @@ function resolveLibraryAgent(stepId: string, spec: GraphSpec["steps"][number]["a
 	if (!validateWebResearcherExtensionTools(agent.ref, toolAccess.extensionTools, diagnostics, `${path}/extensionTools`)) return undefined;
 	const skills = resolveAgentCallerSkills({ mode: context.subagentSkillMode ?? DEFAULT_SUBAGENT_SKILL_MODE, tools: toolAccess.tools, label: `step agent ${stepId}`, path: `${path}/skills`, allowProjectCode: authority.allowProjectCode, diagnostics, context: skillContext });
 	if (!skills) return undefined;
-	return { id: stepId, ref: agent.ref, name: agent.name, kind: "library", description: agent.description, tools: toolAccess.tools, extensionTools: toolAccess.extensionTools, callerSkills: skills, systemPrompt: agent.systemPrompt, model: spec.model ?? agent.model, thinking: spec.thinking === undefined ? agent.thinking : normalizeStepThinking(spec.thinking), source: agent.source, filePath: agent.filePath, sha256: agent.sha256 };
+	return { id: stepId, ref: agent.ref, name: agent.name, kind: "library", description: agent.description, tools: toolAccess.tools, extensionTools: toolAccess.extensionTools, callerSkills: skills, systemPrompt: agent.systemPrompt, model: spec.model ?? agent.model, fallbackModels: spec.fallbackModels ?? agent.fallbackModels, thinking: spec.thinking === undefined ? agent.thinking : normalizeStepThinking(spec.thinking), source: agent.source, filePath: agent.filePath, sha256: agent.sha256 };
 }
 
 function normalizeStepThinking(thinking: GraphSpec["steps"][number]["agent"]["thinking"]): Exclude<ThinkingLevel, "inherit"> | undefined {

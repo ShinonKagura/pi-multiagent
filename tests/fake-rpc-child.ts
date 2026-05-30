@@ -13,7 +13,7 @@ import { PassThrough, Writable } from "node:stream";
 import type { SpawnOptions, SpawnProcess } from "../extensions/multiagent/src/child-launch.ts";
 import type { RpcJsonRecord } from "../extensions/multiagent/src/rpc-jsonl.ts";
 
-export type FakeRpcChildBehavior = "success" | "no-terminal";
+export type FakeRpcChildBehavior = "success" | "no-terminal" | "model-error";
 
 export class FakeRpcChild extends EventEmitter {
 	readonly stdout = new PassThrough();
@@ -50,9 +50,13 @@ export class FakeRpcChild extends EventEmitter {
 		const record = JSON.parse(line) as RpcJsonRecord;
 		setImmediate(() => {
 			this.writeRecord({ type: "response", id: record.id, command: record.type, success: true });
-			if (this.behavior === "success" && record.type === "prompt") {
+			if (record.type !== "prompt") return;
+			if (this.behavior === "success") {
 				this.writeRecord({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop" } });
 				this.writeRecord({ type: "agent_end", stopReason: "stop" });
+			} else if (this.behavior === "model-error") {
+				// Simulate a model/provider availability failure: a non-stop agent_end carrying a model error.
+				this.writeRecord({ type: "agent_end", stopReason: "error", errorMessage: "model is not available" });
 			}
 		});
 	}

@@ -51,6 +51,7 @@ function buildSteps(profile: ResolvedProfile, options: ProfileDetachedGraphOptio
 				system: agent.systemPrompt,
 				tools: agent.tools,
 				model: agent.model,
+				fallbackModels: agent.fallbackModels,
 				thinking: agent.thinking as ThinkingLevel | undefined,
 			}),
 			task: options.task.trim(),

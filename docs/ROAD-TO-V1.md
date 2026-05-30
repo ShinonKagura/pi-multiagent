@@ -75,8 +75,14 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
 
 ## Block B — v0.7 robustness / polish (mostly pre-v1.0)
 
-- [ ] **B1 [BLOCKER]** Runtime fallback-model resolution (active at run-time, not just captured) so a
-  missing/limited primary model falls back instead of failing the run.
+- [x] **B1** Runtime fallback-model resolution landed: `fallbackModels` now flows persona/profile ->
+  graph step (schema + GraphStepAgentInput) -> ResolvedAgent, and the DetachedRun step executor
+  retries the step on the next fallback model when the primary fails with a retryable model/provider
+  error (`modelCandidates` + `isRetryableModelError` in `detached-run.ts`, emitting a `model-fallback`
+  event). Verified: 4 unit tests + an e2e (primary lane model-error -> fallback lane succeeds) + 292
+  substrate tests green, no regression. Honest scope: the retry trigger is a heuristic match on the
+  failure message (broad by design — a false positive costs only one extra attempt, never a wrong
+  success); there is no pre-flight availability probe (no available-models API).
 - [ ] **B2 [opt]** `pi.events` lifecycle events (`hb-orchestra:run-started/completed/failed/canceled`).
 - [ ] **B3 [BLOCKER]** Cross-extension RPC compat (`subagents:rpc:spawn|stop|ping` reply envelopes) —
   required for drop-in replacement of extensions that talked to pi-subagents via RPC.

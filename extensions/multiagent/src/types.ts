@@ -172,6 +172,7 @@ export interface AgentConfig {
 	tags: string[];
 	tools: string[] | undefined;
 	model: string | undefined;
+	fallbackModels?: string[];
 	thinking: Exclude<ThinkingLevel, "inherit"> | undefined;
 	systemPrompt: string;
 	source: Exclude<AgentSource, "inline">;
@@ -287,6 +288,8 @@ interface GraphStepAgentSharedInput {
 	extensionTools?: ExtensionToolGrantSpec[];
 	/** Optional child model lane override. For inline agents, this is the only source of child model metadata. */
 	model?: string;
+	/** Optional ordered fallback child model lanes, tried in order if the primary model fails with a retryable model/provider error. */
+	fallbackModels?: string[];
 	/** Optional child thinking lane override. `inherit` means use parent defaults. */
 	thinking?: ThinkingLevel;
 }
@@ -342,6 +345,7 @@ export interface ResolvedAgent {
 	callerSkills: ResolvedCallerSkill[];
 	systemPrompt: string;
 	model: string | undefined;
+	fallbackModels?: string[];
 	thinking: Exclude<ThinkingLevel, "inherit"> | undefined;
 	source: AgentSource;
 	filePath: string | undefined;

@@ -110,6 +110,7 @@ const StepAgentSchema = Type.Object(
 		tools: Type.Optional(Type.Array(StringEnum(BUILTIN_CHILD_TOOL_NAMES), { description: "Explicit built-in child tool profile. Every child keeps at least the read/discovery suite, so omitted or [] resolves to read, grep, find, and ls and requires graph.authority.allowFilesystemRead:true. For library agents, explicit tools replace the whole catalog defaultTools profile; mandatory read/discovery is then added. It does not append. Any read/discovery primitive expands to the full read, grep, find, ls suite.", maxItems: 24 })),
 		extensionTools: Type.Optional(Type.Array(ExtensionToolGrantSchema, { description: "Explicit parent-active callable extension tool grants for this step.", maxItems: 24 })),
 		model: Type.Optional(nonEmptyText("Optional child model lane override for this step.", MAX_SHORT_TEXT_FIELD_CHARS)),
+		fallbackModels: Type.Optional(Type.Array(nonEmptyText("A fallback child model lane.", MAX_SHORT_TEXT_FIELD_CHARS), { description: "Optional ordered fallback child model lanes. If the step's primary model fails with a retryable model/provider error, the run retries the step with the next model in this list before failing.", maxItems: 8 })),
 		thinking: Type.Optional(StringEnum(THINKING_LEVEL_VALUES, { description: "Optional child thinking lane override for this step. Use inherit to keep parent defaults." })),
 	},
 	{ ...StrictObjectOptions, description: "Step-local inline agent or source-qualified library agent. Set exactly one of system or ref. No invocation-local agent registry is used." },

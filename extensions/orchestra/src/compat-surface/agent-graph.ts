@@ -18,6 +18,7 @@ export function agentInvocationToDetachedGraphStart(persona: Persona, invocation
 	const subagent_type = invocation.subagent_type;
 	const tools = invocation.tools ?? copyList(persona.frontmatter.tools);
 	const model = invocation.model ?? persona.frontmatter.model;
+	const fallbackModels = persona.frontmatter.fallbackModels;
 	const thinking = invocation.thinking ?? persona.frontmatter.thinking;
 
 	const diagnostics = validate(invocation, tools, thinking);
@@ -32,6 +33,7 @@ export function agentInvocationToDetachedGraphStart(persona: Persona, invocation
 			system: persona.systemPrompt,
 			tools,
 			model,
+			fallbackModels,
 			thinking: thinking as ThinkingLevel | undefined,
 		}),
 		task: invocation.prompt.trim(),

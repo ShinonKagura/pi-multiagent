@@ -279,20 +279,32 @@ export class DetachedRun {
 			let rpcResult: RpcStepResult | undefined;
 			let rpcError: unknown;
 			try {
-				const controller = new RpcChildController({
-					agent: state.spec.agent,
-					defaults: this.options.defaults,
-					limits: this.graph.limits,
-					cwd: effectiveCwd,
-					promptPath,
-					spawnProcess: this.options.spawnProcess ?? spawn,
-					ackTimeoutMs: this.options.rpcCommandAckTimeoutMs,
-					outputLimit: state.spec.outputLimit,
-					onText: (text) => this.updateLiveText(state, text),
-					onEvent: (event) => this.appendEvent({ ...event, stepId: state.spec.id }),
-				});
-				state.controller = controller;
-				rpcResult = await controller.run(task);
+				// B1 runtime fallback: try the step's primary model, then its declared fallbackModels in
+				// order, retrying only on a failure that looks like a model/provider availability error.
+				const candidateModels = modelCandidates(state.spec.agent);
+				for (let attempt = 0; attempt < candidateModels.length; attempt++) {
+					const model = candidateModels[attempt];
+					const controller = new RpcChildController({
+						agent: model === state.spec.agent.model ? state.spec.agent : { ...state.spec.agent, model },
+						defaults: this.options.defaults,
+						limits: this.graph.limits,
+						cwd: effectiveCwd,
+						promptPath,
+						spawnProcess: this.options.spawnProcess ?? spawn,
+						ackTimeoutMs: this.options.rpcCommandAckTimeoutMs,
+						outputLimit: state.spec.outputLimit,
+						onText: (text) => this.updateLiveText(state, text),
+						onEvent: (event) => this.appendEvent({ ...event, stepId: state.spec.id }),
+					});
+					state.controller = controller;
+					const result = await controller.run(task);
+					if (result.status === "failed" && attempt < candidateModels.length - 1 && isRetryableModelError(result.errorMessage)) {
+						this.appendEvent({ stepId: state.spec.id, type: "step", label: "model-fallback", preview: `model ${model ?? "(default)"} failed (${(result.errorMessage ?? "").slice(0, 120)}); retrying with ${candidateModels[attempt + 1] ?? "(default)"}`, status: "warning" });
+						continue;
+					}
+					rpcResult = result;
+					break;
+				}
 			} catch (error) {
 				rpcError = error;
 			} finally {
@@ -470,4 +482,28 @@ function runOwnerKey(sessionId: string | undefined): string {
 
 function now(): string {
 	return new Date().toISOString();
+}
+
+/** Ordered, de-duplicated model lanes to try for a step: the primary model first, then declared
+ * fallbacks. Always has at least one entry (the primary, which may be undefined = parent default). */
+export function modelCandidates(agent: { model: string | undefined; fallbackModels?: string[] }): (string | undefined)[] {
+	const out: (string | undefined)[] = [agent.model];
+	const seen = new Set<string>(agent.model === undefined ? [] : [agent.model]);
+	for (const fallback of agent.fallbackModels ?? []) {
+		if (fallback && !seen.has(fallback)) {
+			seen.add(fallback);
+			out.push(fallback);
+		}
+	}
+	return out;
+}
+
+/** Heuristic: does this step failure look like a model/provider availability error worth retrying on
+ * the next fallback model? Broad by design — a false positive only costs one extra attempt that the
+ * next model resolves or fails identically; it can never turn a failure into a wrong success. */
+export function isRetryableModelError(message: string | undefined): boolean {
+	if (!message) return false;
+	const text = message.toLowerCase();
+	if (!/\b(model|provider|deployment)\b/.test(text)) return false;
+	return /(not found|be found|not exist|cannot find|could not find|unknown|unavailable|unsupported|no access|not available|invalid|deprecated|decommission|unauthor|forbidden|permission|rate.?limit|quota|overloaded|capacity|too many requests|\b503\b|\b429\b)/.test(text);
 }
