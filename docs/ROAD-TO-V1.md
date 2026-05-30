@@ -119,8 +119,12 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
   branded lifecycle events) and the intentional non-goals (no child->parent intercom, no recursion).
   Linked from HB_ORCHESTRA_README.md. (The inherited `docs/migration-guide.md` remains the lower-level
   agent_team graph migration.)
-- [ ] **C3 [BLOCKER]** README + cookbook + **20+ examples**: simple Agent, multi-model parallel, chain
-  with artifact handoff, schedule, worktree-isolated, persona override.
+- [x] **C3** Cookbook + examples: `docs/COOKBOOK.md` (11 recipes covering simple Agent, multi-model
+  parallel, chain with artifact handoff, persona/model override, worktree-isolated mutation, schedule,
+  replay, harness governance, steer, and RPC). Example assets: 5 personas (`examples/agents/`), 3
+  profiles (`examples/profiles/`), 18 graphs (`examples/graphs/`), 1 harness contract = 27 runnable
+  examples (>20). Personas validated through the real loader (0 errors; `fallbackModels` parses).
+  Linked from HB_ORCHESTRA_README.md.
 - [ ] **C4 [BLOCKER]** Publish to pi.dev as `hb-orchestra`.
 - [ ] **C5 [BLOCKER]** Public test matrix (depends on D1/D2 being green).
 
