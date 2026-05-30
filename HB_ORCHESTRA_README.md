@@ -1,5 +1,7 @@
 # hb-orchestra
 
+[![CI](https://github.com/ShinonKagura/pi-multiagent/actions/workflows/ci.yml/badge.svg?branch=hb-orchestra-v0.5)](https://github.com/ShinonKagura/pi-multiagent/actions/workflows/ci.yml)
+
 **Detached multi-agent orchestration for Pi — with `Agent()` compatibility, persona/profile composition, harness contracts, and a reproducibility ledger.**
 
 Fork of `pi-multiagent` (Tiziano-AI/pi-multiagent v0.10.0) with extended product scope. Upstream contributions remain in their canonical home; this fork carries the features Tiziano explicitly declined to take.
@@ -17,6 +19,7 @@ Fork of `pi-multiagent` (Tiziano-AI/pi-multiagent v0.10.0) with extended product
 - **Frozen public API (v1.0 contract): [`docs/API.md`](./docs/API.md)** — tools, commands, persona/profile/harness schemas, lifecycle events, RPC, reproducibility; guarded by `tests/orchestra-api-contract.test.ts`.
 - **Migrating from pi-subagents: [`docs/MIGRATION-FROM-PI-SUBAGENTS.md`](./docs/MIGRATION-FROM-PI-SUBAGENTS.md)** — near drop-in tool/command/persona mapping, RPC + lifecycle deltas, and what's intentionally not carried over.
 - **Cookbook: [`docs/COOKBOOK.md`](./docs/COOKBOOK.md)** — 11 task recipes (simple Agent, multi-model parallel, chain handoff, persona override, worktree-isolated, schedule, replay, harness, steer, RPC) over the runnable [`examples/`](./examples) personas/profiles/graphs.
+- **Releasing + test matrix: [`docs/RELEASING.md`](./docs/RELEASING.md)** — publish runbook (operator-owned), packaging-guard status, and the CI test matrix.
 
 Implemented today: Layer 1 (agent-registry), Layer 2 (profile-engine composition), Layer 3 (profile→detached-graph mapping), and a Layer 6 minimal slice (`Agent` tool + `/agent` command). Everything else below is a v0.5 target, not a shipped feature.
 

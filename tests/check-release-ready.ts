@@ -8,7 +8,7 @@ const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageJson = readPackageJson();
 const changelog = readFileSync(join(packageRoot, "CHANGELOG.md"), "utf8");
 
-assert.equal(packageJson.name, "pi-multiagent", "release guard is scoped to pi-multiagent");
+assert.equal(packageJson.name, "hb-orchestra", "release guard is scoped to hb-orchestra");
 assert.equal(packageJson.private, undefined, "package must not be private");
 assert.equal(typeof packageJson.version, "string", "package.json version must be a string");
 assert.match(packageJson.version, /^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/, "package.json version must be semver-shaped");

@@ -309,7 +309,7 @@ Use `graphFile` only with `start` and only for a pure graph JSON file copied int
 ```json
 {
   "action": "start",
-  "graphFile": "implementation-review-gate.json"
+  "graphFile": "validation-matrix-gate.json"
 }
 ```
 
@@ -379,15 +379,15 @@ Load these only when they unlock a decision, prevent rework, or reduce risk.
 - [Inline Read-Only Fan-in](../../examples/graphs/inline-read-only-fanin.json)
 - [Human-Gated Plan Only](../../examples/graphs/human-gated-plan-only.json)
 - [Artifact-Chained Decision](../../examples/graphs/artifact-chained-decision.json)
-- [Approved Plan Implementation](../../examples/graphs/approved-plan-implementation.json)
+- [Evidence Trace Audit](../../examples/graphs/evidence-trace-audit.json)
 - [Command Validation Only](../../examples/graphs/command-validation-only.json)
 - [Completed Proof Review](../../examples/graphs/completed-proof-review.json)
 - [Read-Only Audit Fanout](../../examples/graphs/read-only-audit-fanout.json)
 - [Map-Reduce Audit Fanout](../../examples/graphs/map-reduce-audit-fanout.json)
 - [Model-Facing Docs Audit](../../examples/graphs/model-facing-docs-audit.json)
-- [Docs/Examples Alignment](../../examples/graphs/docs-examples-alignment.json)
-- [Implementation Review Gate](../../examples/graphs/implementation-review-gate.json)
+- [Product Experience Source Audit](../../examples/graphs/product-experience-source-audit.json)
+- [Tree-Reduce Source Review](../../examples/graphs/tree-reduce-source-review.json)
 - [Worktree-Isolated Mutation (F5)](../../examples/graphs/worktree-isolated-mutation.json)
 - [Research-to-Change Gated Loop](../../examples/graphs/research-to-change-gated-loop.json)
 - [Release Readiness Review](../../examples/graphs/release-readiness-review.json)
-- [Public Release Foundry](../../examples/graphs/public-release-foundry.json)
+- [Sharded Map-Reduce Audit](../../examples/graphs/sharded-map-reduce-audit.json)

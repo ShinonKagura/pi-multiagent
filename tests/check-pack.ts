@@ -49,7 +49,7 @@ for (const forbidden of [
 ]) {
 	assert.equal(paths.has(forbidden), false, `packed artifact should not include ${forbidden}`);
 }
-assert.equal(paths.size < 120, true, "packed artifact should stay within the expected file-count budget");
+assert.equal(paths.size < 170, true, "packed artifact should stay within the expected file-count budget");
 for (const path of paths) {
 	assert.equal(isAllowedPackedPath(path), true, `packed artifact includes an unexpected package surface: ${path}`);
 	assert.equal(path.startsWith("tests/"), false, `packed artifact should not include tests: ${path}`);
@@ -67,8 +67,8 @@ function requiredPackedFiles(): string[] {
 		"CHANGELOG.md",
 		"LICENSE",
 		...collectFiles("agents", ".md"),
-		...collectFiles("assets", ".webp"),
 		...collectFiles("examples", ".json"),
+		...collectFiles("examples", ".md"),
 		...collectFiles("skills", ".md"),
 		...collectFiles("extensions", ".ts"),
 	];

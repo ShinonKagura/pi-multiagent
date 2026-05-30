@@ -36,8 +36,8 @@
     "CHANGELOG.md",
     "LICENSE",
     "agents/*.md",
-    "assets/*.webp",
     "examples/**/*.json",
+    "examples/**/*.md",
     "skills/**/*.md",
     "extensions/**/*.ts"
   ],

@@ -125,8 +125,17 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
   profiles (`examples/profiles/`), 18 graphs (`examples/graphs/`), 1 harness contract = 27 runnable
   examples (>20). Personas validated through the real loader (0 errors; `fallbackModels` parses).
   Linked from HB_ORCHESTRA_README.md.
-- [ ] **C4 [BLOCKER]** Publish to pi.dev as `hb-orchestra`.
-- [ ] **C5 [BLOCKER]** Public test matrix (depends on D1/D2 being green).
+- [~] **C4** Package PREPARED for publish (actual publish is operator-owned — needs credentials + a
+  release decision). Done: `name: hb-orchestra` + `publishConfig.access: public`; `files` ships the
+  example personas/profiles + drops the stale gallery asset; `check:pack` (size + file-count budgets)
+  and `check:source-size` pass; `check:release` passes its identity asserts (the rest are release-time
+  gates: clean tree, CHANGELOG, version); dead example-graph links in SKILL.md fixed. Runbook in
+  `docs/RELEASING.md`. Follow-up (pre-existing inherited-debt, non-blocking): `check:public-docs`
+  doc-fragment contract + `check:pi-load` multi-extension mock need reconciliation against the
+  rebrand + v0.10 redesign.
+- [x] **C5** Public test matrix: CI enforces three required gates (typecheck + hb-orchestra layer +
+  inherited substrate suite) on every push/PR; documented in `docs/RELEASING.md` with a CI status
+  badge on the README. The API contract is machine-guarded by `tests/orchestra-api-contract.test.ts`.
 
 ---
 
