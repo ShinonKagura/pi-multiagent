@@ -101,6 +101,13 @@ export class DetachedRun {
 
 	/** G4: best-effort lifecycle event emission. Never throws. */
 	private emitLifecycle(eventName: string, payload: Record<string, unknown>): void {
+		this.emitLifecycleRaw(eventName, payload);
+		// Dual-brand: mirror every pi-multiagent: lifecycle event under the hb-orchestra: prefix so
+		// cross-extension consumers can subscribe to the new brand without breaking legacy subscribers.
+		if (eventName.startsWith("pi-multiagent:")) this.emitLifecycleRaw(`hb-orchestra:${eventName.slice("pi-multiagent:".length)}`, payload);
+	}
+
+	private emitLifecycleRaw(eventName: string, payload: Record<string, unknown>): void {
 		try {
 			this.options.emitLifecycleEvent?.(eventName, payload);
 		} catch {
@@ -385,6 +392,9 @@ export class DetachedRun {
 		releasePersistentRun(this.persistent);
 		this.notifier.sendTerminal(this.status, terminalStepNoticeReasons(snapshots));
 		this.emitLifecycle("pi-multiagent:run-completed", { runId: this.id, status: this.status, stepStatuses: Object.fromEntries(snapshots.map((s) => [s.id, s.status])) });
+		// Status-specific terminal event (run-succeeded | run-failed | run-canceled | run-timed_out) so a
+		// consumer can subscribe to a single outcome without inspecting the run-completed payload.
+		this.emitLifecycle(`pi-multiagent:run-${this.status}`, { runId: this.id, status: this.status });
 		this.scheduleRetention();
 	}
 

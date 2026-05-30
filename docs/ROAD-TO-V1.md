@@ -83,7 +83,11 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
   substrate tests green, no regression. Honest scope: the retry trigger is a heuristic match on the
   failure message (broad by design — a false positive costs only one extra attempt, never a wrong
   success); there is no pre-flight availability probe (no available-models API).
-- [ ] **B2 [opt]** `pi.events` lifecycle events (`hb-orchestra:run-started/completed/failed/canceled`).
+- [x] **B2** `pi.events` lifecycle events: the existing run lifecycle emits (run-started, run-completed,
+  step-finished, run-failed-pre-start) are now **dual-branded** — every `pi-multiagent:` event is also
+  mirrored under `hb-orchestra:`, plus a status-specific terminal event
+  (`run-succeeded|run-failed|run-canceled|run-timed_out`) so a consumer can subscribe to one outcome.
+  `detached-run.ts` (`emitLifecycle` dual-prefix + terminal emit); tested in `tests/lifecycle-events.test.ts`.
 - [x] **B3** Cross-extension RPC surface landed: `registerSubagentsRpc` (extensions/multiagent/src/
   rpc-bridge.ts) listens on the shared Pi `EventBus` for `subagents:rpc:ping|spawn|stop` and answers
   each with a reply envelope on `subagents:rpc:reply` (`{ id?, method, ok, result?|error? }`). Wired in
