@@ -7,7 +7,8 @@ import { Compile } from "typebox/compile";
 import { findNearestProjectAgentsDir, normalizeLibraryOptions } from "./src/agents.ts";
 import type { SpawnProcess } from "./src/child-launch.ts";
 import { runAgentTeam } from "./src/delegation.ts";
-import { listDetachedRuns } from "./src/detached-registry.ts";
+import { getDetachedRun, listDetachedRuns } from "./src/detached-registry.ts";
+import { registerSubagentsRpc } from "./src/rpc-bridge.ts";
 import { pruneOrphanWorktreeBranches, pruneStaleWorktrees, teardownWorktreeForStep, type MutationWorktreeState as MutationWorktreeStateType } from "./src/mutation-worktree.ts";
 import { sweepRunsRoot, type PersistedWorktreeRecord } from "./src/persistent-run-state.ts";
 import { ScheduledRunRegistry } from "./src/scheduled-runs.ts";
@@ -120,7 +121,48 @@ export function registerMultiagentExtension(pi: ExtensionAPI, extensionOptions: 
 
 	// NEU-A B1a: opportunistic startup sweep at extension activation.
 	runSweep("startup");
+
+	// B3: cross-extension RPC surface on the shared event bus. Other extensions can ping/spawn/stop
+	// hb-orchestra runs and receive reply envelopes on subagents:rpc:reply. See src/rpc-bridge.ts.
+	const offSubagentsRpc = pi.events
+		? registerSubagentsRpc(pi.events, {
+				version: "0.5",
+				stop: (params) => {
+					const runId = typeof params.runId === "string" ? params.runId : undefined;
+					if (!runId) throw new Error("subagents:rpc:stop requires a string 'runId' param.");
+					const run = getDetachedRun(runId);
+					if (!run) throw new Error(`subagents:rpc:stop: unknown runId ${runId}`);
+					run.cancel("subagents:rpc:stop", { forceKill: false });
+					return { runId, stopped: true };
+				},
+				spawn: async (params) => {
+					if (!params.graph || typeof params.graph !== "object") throw new Error("subagents:rpc:spawn requires a 'graph' param (an agent_team start graph).");
+					const { runAgentTeam } = await import("./src/delegation.ts");
+					const start = { action: "start" as const, graph: params.graph } as Parameters<typeof runAgentTeam>[0];
+					const result = await runAgentTeam(start, {
+						cwd: process.cwd(),
+						packageAgentsDir,
+						materializationDiagnostics: [],
+						catalogPreparationDiagnostics: [],
+						catalogLibrary: { sources: ["package"], query: undefined, projectAgents: "deny" },
+						sessionId: "subagents-rpc",
+						defaults: { model: undefined, thinking: undefined },
+						parentTools: getParentToolInventory(pi),
+						parentSkills: getParentSkillInventory(pi),
+						signal: undefined,
+						onUpdate: undefined,
+						spawnProcess: extensionOptions.spawnProcess,
+						scheduledRunRegistry,
+					});
+					const runId = result.details?.run?.runId;
+					if (!runId || result.details?.ok === false) throw new Error(result.details?.error?.message ?? "subagents:rpc:spawn failed to start a run.");
+					return { runId };
+				},
+			})
+		: () => {};
+
 	pi.on("session_shutdown", (event: { reason?: string }, ctx) => {
+		if (event.reason === "quit" || event.reason === "reload") offSubagentsRpc();
 		const reason = event.reason ? `Parent Pi session shutdown: ${event.reason}.` : "Parent Pi session shutdown.";
 		const sessionId = ctx.sessionManager.getSessionId();
 		closedUiSessions.add(sessionId);

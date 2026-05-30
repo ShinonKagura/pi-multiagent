@@ -84,8 +84,17 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
   failure message (broad by design — a false positive costs only one extra attempt, never a wrong
   success); there is no pre-flight availability probe (no available-models API).
 - [ ] **B2 [opt]** `pi.events` lifecycle events (`hb-orchestra:run-started/completed/failed/canceled`).
-- [ ] **B3 [BLOCKER]** Cross-extension RPC compat (`subagents:rpc:spawn|stop|ping` reply envelopes) —
-  required for drop-in replacement of extensions that talked to pi-subagents via RPC.
+- [x] **B3** Cross-extension RPC surface landed: `registerSubagentsRpc` (extensions/multiagent/src/
+  rpc-bridge.ts) listens on the shared Pi `EventBus` for `subagents:rpc:ping|spawn|stop` and answers
+  each with a reply envelope on `subagents:rpc:reply` (`{ id?, method, ok, result?|error? }`). Wired in
+  index.ts: ping -> liveness+version, spawn -> `runAgentTeam` start (result `{ runId }`), stop ->
+  `getDetachedRun(runId).cancel()`. Tested with a real EventBus (7 cases: ping/stop/spawn success +
+  error + unsubscribe + parsing). Honest scope: there is no surviving pi-subagents protocol spec to
+  mirror byte-for-byte, so this DEFINES hb-orchestra's cross-extension contract; RPC-spawned runs use a
+  synthetic `subagents-rpc` session id and are not auto-cancelled on user session shutdown.
+  (Separately, the legacy `tests/check-package-load.ts` script is pre-existing-red: it was written for
+  the single-extension package and asserts `agent_team` per extension + has an incomplete mock for
+  the orchestra extension's `registerCommand`; not in the CI gates, tracked for a later rewrite.)
 - [ ] **B4 [opt]** OPEN-2 concurrency edge: a `<pid>`-namespaced runId for truly concurrent
   same-machine processes (the common sequential case is already fixed via serial seeding).
 - [ ] **B5 [opt]** OPEN-3: `bash` persona from a project-settings workspace + headless project-agent
