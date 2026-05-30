@@ -1,6 +1,6 @@
 {
   "name": "hb-orchestra",
-  "version": "0.5.0-pre",
+  "version": "1.0.0",
   "type": "module",
   "description": "HeavensByte orchestra — detached multi-agent execution + Agent() compat + persona/profile composition + reproducibility ledger for Pi. Fork of pi-multiagent with extended product scope.",
   "forkOf": {

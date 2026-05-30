@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+## 1.0.0 - 2026-05-30
+
+- First public release of **hb-orchestra** — detached multi-agent orchestration for Pi, built on the inherited `pi-multiagent` substrate with extended product scope across all six layers.
+- **L6 compat surface:** `Agent` / `get_subagent_result` / `steer_subagent` tools + `/agent`, plus `Profile` / `/profile` (persona/profile → detached run) and bounded foreground `waitSeconds`. Near drop-in for `pi-subagents` (same params, same `.pi/agents/` personas).
+- **L1/L2/L3:** persona registry (`.pi/agents/<name>.md`), profile composition (`.pi/profiles/<name>.{md,json}`), and pure graph mapping.
+- **L4 harness governance:** read-only `.pi/harness/contract.json`; enforced on runs — a `mutationAllowed:false` contract blocks mutating runs, a mutating step whose `mutationScope` targets a `forbiddenPath` is blocked (`harness-policy-denied`), and the path/scope policy + `systemPromptFiles` are injected into child prompts.
+- **L5 reproducibility ledger:** deterministic `run_hash`, a persisted replay manifest, and a `Replay` tool + `/replay <run_hash|runId>` that re-launches the identical graph (verified reproducible).
+- **Runtime model fallback:** persona/profile `fallbackModels` retry the next model on a model/provider failure.
+- **Lifecycle events:** run lifecycle is emitted under both `pi-multiagent:` and `hb-orchestra:` prefixes, plus status-specific terminal events.
+- **Cross-extension RPC:** `subagents:rpc:ping|spawn|stop` over the shared EventBus with reply envelopes.
+- **Frozen public API:** documented in `docs/API.md` and machine-guarded by `tests/orchestra-api-contract.test.ts` (run_hash determinism, replay manifest schema, RPC channels, harness discovery, authority keys).
+- **CI:** three required gates (typecheck + hb-orchestra layer + inherited substrate suite) on every push/PR.
+- **Docs:** usage guide, API contract, pi-subagents migration guide, cookbook (11 recipes), and a release runbook; 27 runnable examples (personas/profiles/graphs).
+- Robustness: OPEN-1 cross-process run registry + OPEN-2 runId serial seeding (no orphan collisions in the common case).
+- Known non-blocking follow-ups: two manual pre-release check scripts (`check:public-docs` doc-fragment contract, `check:pi-load` single-extension mock) are stale relative to the rebrand + the substrate's v0.10 capability redesign and are tracked for a later reconciliation; they are not part of the enforced CI gates.
+
 ## 0.10.0 - 2026-05-26
 
 - **FIX-7 (MEDIUM, found in real-Pi smoke)** — `assertCleanWorkingTree` returned `worktree-tree-dirty` without surfacing WHICH entries were dirty, making the failure mode opaque to operators. Real-Pi smoke runs 1-5 all hit this error but the smoke harness post-run check found the tree clean (gitignored). Without the actual dirty entries in the error, debugging required race-prone manual file inspection. Fixed by appending `git status --porcelain` output (first 10 lines, with overflow indicator) to the error message. Bounded so the diagnostic doesn't balloon for already-broken trees.
