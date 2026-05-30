@@ -113,7 +113,12 @@ Recommended order: **D (CI/test health) → A1 + B1 + B3 (functional/robust) →
   `tests/orchestra-api-contract.test.ts` (run_hash determinism, replay manifest field set +
   schemaVersion, RPC channels, harness discovery surface, authority key set) so an accidental breaking
   change trips CI. Linked from HB_ORCHESTRA_README.md.
-- [ ] **C2 [BLOCKER]** Migration guide from `pi-subagents` with concrete code-level mappings.
+- [x] **C2** Migration guide from `pi-subagents`: `docs/MIGRATION-FROM-PI-SUBAGENTS.md` with concrete
+  before/after code mappings (Agent/get/steer tools + `/agent` are near drop-in; foreground ->
+  `waitSeconds`; chains -> Profiles; same `.pi/agents/` personas; `subagents:rpc:*` channels; dual-
+  branded lifecycle events) and the intentional non-goals (no child->parent intercom, no recursion).
+  Linked from HB_ORCHESTRA_README.md. (The inherited `docs/migration-guide.md` remains the lower-level
+  agent_team graph migration.)
 - [ ] **C3 [BLOCKER]** README + cookbook + **20+ examples**: simple Agent, multi-model parallel, chain
   with artifact handoff, schedule, worktree-isolated, persona override.
 - [ ] **C4 [BLOCKER]** Publish to pi.dev as `hb-orchestra`.
