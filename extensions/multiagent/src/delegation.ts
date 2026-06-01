@@ -6,6 +6,7 @@ import { catalogAgents, discoverAgents, normalizeLibraryOptions } from "./agents
 import { DetachedRun } from "./detached-run.ts";
 import { forgetDetachedRun, getDetachedRun, listDetachedRuns, registerDetachedRun } from "./detached-registry.ts";
 import { materializeAgentTeamInput } from "./graph-file.ts";
+import { normalizeAgentTeamInput } from "./input-normalization.ts";
 import { resolveDetachedGraph, validatePreflightShape } from "./planning.ts";
 import { finalizeDetails, hasDiagnosticError, makeDetails, type AgentTeamRuntimeOptions, unavailableTools } from "./runtime-options.ts";
 import { schemaRepair } from "./schema-repair.ts";
@@ -19,10 +20,11 @@ import { AGENT_TEAM_ACTION_VALUES, DEFAULT_GRAPH_LIBRARY_SOURCES, DEFAULT_RESULT
 const validateAgentTeamInput = Compile(AgentTeamSchema);
 
 export async function runAgentTeam(rawInput: unknown, options: AgentTeamRuntimeOptions): Promise<AgentToolResult<AgentTeamDetails>> {
-	const rawPreflightDiagnostics = validatePreflightShape(rawInput);
-	const rawSchemaDiagnostics = validateInputSchema(rawInput);
-	const rawDiagnostics = [...rawPreflightDiagnostics, ...rawSchemaDiagnostics];
-	const materialized = hasDiagnosticError(rawDiagnostics) ? { input: rawInput, diagnostics: [] } : materializeAgentTeamInput(rawInput, options.cwd);
+	const normalized = normalizeAgentTeamInput(rawInput);
+	const rawPreflightDiagnostics = validatePreflightShape(normalized.input);
+	const rawSchemaDiagnostics = validateInputSchema(normalized.input);
+	const rawDiagnostics = [...normalized.diagnostics, ...rawPreflightDiagnostics, ...rawSchemaDiagnostics];
+	const materialized = hasDiagnosticError(rawDiagnostics) ? { input: normalized.input, diagnostics: [] } : materializeAgentTeamInput(normalized.input, options.cwd);
 	const inputForValidation = materialized.input;
 	const materializedPreflightDiagnostics = materialized.input === rawInput ? [] : validatePreflightShape(inputForValidation);
 	const materializedSchemaDiagnostics = materialized.input === rawInput ? [] : validateInputSchema(inputForValidation);

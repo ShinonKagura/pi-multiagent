@@ -35,6 +35,7 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "assets/*.webp",
     "agents/*.md",
     "examples/**/*.json",
     "examples/**/*.md",
@@ -60,6 +61,7 @@
     "typebox": "*"
   },
   "pi": {
+    "image": "./assets/pi-multiagent-gallery.webp",
     "extensions": [
       "./extensions/multiagent/index.ts",
       "./extensions/orchestra/index.ts"

@@ -26,7 +26,10 @@ type PreflightField =
 	| "steps"
 	| "limits"
 	| "authority"
-	| "extensionTools";
+	| "extensionTools"
+	| "model"
+	| "fallbackModels"
+	| "thinking";
 
 interface ActionRule {
 	allowed: readonly PreflightField[];
@@ -69,6 +72,9 @@ const KNOWN_FIELDS: readonly PreflightField[] = [
 	"limits",
 	"authority",
 	"extensionTools",
+	"model",
+	"fallbackModels",
+	"thinking",
 ];
 
 // Current graph body fields eligible for the start "move under graph" repair message.
@@ -123,6 +129,7 @@ function misplacedFields(input: Record<string, unknown>, allowedFields: readonly
 function repairFor(action: ExecutionAction, fields: string[]): string {
 	const fieldSet = new Set(fields);
 	if (action === "start" && fields.some((field) => START_GRAPH_BODY_REPAIR_FIELDS.has(field as PreflightField))) return 'Move graph body fields under graph: {"action":"start","graph":{"objective":"...","authority":{"allowFilesystemRead":true},"steps":[...]}}. Put start sources in graph.library; top-level library is catalog-only.';
+	if (["model", "fallbackModels", "thinking"].some((field) => fieldSet.has(field))) return "Place model, fallbackModels, and thinking under steps[].agent; they are not top-level action controls or step-level graph fields.";
 	if (fieldSet.has("extensionTools")) return "Place extensionTools under steps[].agent.extensionTools with catalog-copied provenance; agent.tools accepts only built-in child tools.";
 	if (action === "catalog" && fieldSet.has("maxBytes")) return "Remove maxBytes; use library.query to narrow catalog results. maxBytes is valid only on run_status/step_result: it bounds assistant previews when preview:true and raw debug events when debugEvents:true.";
 	if (fieldSet.has("preview")) return "Use preview only on run_status or step_result; it defaults to false and opts into bounded assistant text previews. Use maxBytes there only to bound those previews or run_status debug events.";

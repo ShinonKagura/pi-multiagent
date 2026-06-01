@@ -48,10 +48,14 @@ async function loadPackageRoot(root: string, label: string): Promise<void> {
 		const extension = moduleRecord.default;
 		assert.equal(typeof extension, "function", `${label}: ${extensionPath} default export should be a Pi extension function`);
 		const tools: RegisteredTool[] = [];
+		const commands: string[] = [];
 		const flagValues = new Map<string, boolean | string>();
 		extension({
 			on() {},
 			registerMessageRenderer() {},
+			registerCommand(name: string) {
+				commands.push(name);
+			},
 			registerFlag(name: string, options: { default?: boolean | string }) {
 				if (options.default !== undefined) flagValues.set(name, options.default);
 			},
@@ -67,8 +71,13 @@ async function loadPackageRoot(root: string, label: string): Promise<void> {
 			},
 		});
 		const tool = tools.find((candidate) => candidate.name === "agent_team");
-		assert.ok(tool, `${label}: ${extensionPath} should register agent_team`);
-		assert.equal(flagValues.get("agent-team-subagent-skills"), "enabled", `${label}: ${extensionPath} should default subagent skills to enabled`);
+		if (!tool) {
+			assert.equal(extensionPath.includes("orchestra"), true, `${label}: ${extensionPath} should register agent_team or be the hb-orchestra compat extension`);
+			for (const name of ["Agent", "Profile", "get_subagent_result", "steer_subagent", "Replay"]) assert.equal(tools.some((candidate) => candidate.name === name), true, `${label}: ${extensionPath} should register ${name}`);
+			for (const name of ["agent", "profile", "harness", "replay"]) assert.equal(commands.includes(name), true, `${label}: ${extensionPath} should register /${name}`);
+			continue;
+		}
+		assert.equal(flagValues.get("agent-team-subagent-skills"), "auto", `${label}: ${extensionPath} should default subagent skills to auto`);
 		assert.match(tool.description ?? "", /step_result.*one step/);
 		assert.equal((tool.description ?? "").length < 1400, true, `${label}: agent_team description should stay compact`);
 		assert.equal((tool.promptGuidelines ?? []).join("\n").length < 3600, true, `${label}: agent_team prompt guidelines should stay within model-facing budget`);

@@ -46,7 +46,7 @@ After installing in a running Pi session, use `/reload`. Reload requests cancell
 | `cancel` | Stop a live run when stopping is explicit, unsafe/stuck/obsolete, or lower value than freeing capacity. |
 | `cleanup` | Delete terminal retained evidence after artifact paths are preserved or intentionally discarded. |
 
-Detailed action pseudo-schema belongs in the skill. Do not send read controls such as `cursor`, `waitSeconds`, `maxBytes`, `preview`, or `debugEvents` to `catalog` or `start`; `catalog` is narrowed with `library.query`. Schema-admissible action-shape failures render as `# agent_team error` with repair copy and are marked as Pi tool-result errors when the package returns `ok:false`, so transcript/session consumers can distinguish failed `agent_team` actions from successful receipts.
+Detailed action pseudo-schema belongs in the skill. Do not send read controls such as `cursor`, `waitSeconds`, `maxBytes`, `preview`, or `debugEvents` to `catalog` or `start`; `catalog` is narrowed with `library.query`. Schema-admissible action-shape failures render as `# agent_team error` with repair copy and are marked as Pi tool-result errors when the package returns `ok:false`, so transcript/session consumers can distinguish failed `agent_team` actions from successful receipts. For agent ergonomics, `start` also normalizes two unambiguous mistakes with warning diagnostics: `graph.graph` double nesting and step-level `model` / `fallbackModels` / `thinking` fields that should live under `steps[].agent`; conflicting values still fail closed.
 
 ## Minimum read-only run
 
@@ -104,6 +104,8 @@ In short, pushed notices are compact human receipts and omit the full child tran
 
 Retained detached runs keep terminal metadata and artifact paths only inside the current extension process. Cleanup frees only terminal retained runs and deletes package-owned retained evidence. Preserve artifacts before cleanup when they may support handoff, compaction recovery, chained graphs, or release proof.
 
+Supervision contract: the TUI may show an `agent_team:live` widget and a shared footer status row, but JSON/API/headless supervision should use `run_status`, `step_result`, and artifact paths. If `run_status` returns a `Cursor`, pass the returned `Cursor` value back only when you intentionally want incremental wait/debug backfill.
+
 ## Graph and authority boundaries
 
 Graphs are static DAGs. Bind each step to either inline `agent.system` or a source-qualified `agent.ref`; model synthesis as a normal dependent step. Use `needs` for success-gated dependencies and `after` when a downstream step should consume terminal evidence from failed or blocked lanes too. Sink steps, not array order, define caller-facing finals.
@@ -125,7 +127,9 @@ Authority is graph-wide:
 | `allowProjectCode` | `project:` agents, project library sources, project/local explicit `extensionTools` grants, and project/temporary caller skill sources; it does not disable normal Pi extension discovery. |
 | `allowMutationWorktree` | Per-step git worktree isolation requests via `steps[].isolation:"worktree"`. OS-level: the child runs inside a separate git working copy branched from HEAD; per-step diff stat and full patch are captured as terminal artifact evidence; the worktree and its temp branch are removed after the step terminalizes. Requires a clean git repo at the nearest git root of the invocation cwd. Mutation-capable only: rejected at planning time for read-only steps. Not a sandbox for arbitrary bash (network, `cd` outside, etc.). Not crash-resumable: a Pi crash mid-step can leak a worktree until extension startup prunes it. |
 
-Write-capable steps and bash-capable `package:worker` steps need concrete first-class `mutationScope`. `mutationScope` is a planning/prompt handoff, not path confinement; bash/edit/write are not path-confined.
+Write-capable steps and bash-capable `package:worker` steps need concrete first-class `mutationScope`. `mutationScope` is a planning/prompt handoff, not path confinement; bash/edit/write are not path-confined. Use trusted shell execution only with `allowShellTools:true`; use trusted mutation execution only with explicit `allowMutationTools:true`, concrete `mutationScope`, and current operator authorization. `package:validator` requires effective `bash`; `package:worker` requires effective `edit` or `write`.
+
+Project and user library sources load when requested through `graph.library.sources` plus the matching authority. source and file path stay provenance, not ranking signals. Subagent skill strict modes are available with `--agent-team-subagent-skills enabled|disabled`.
 
 ## Worktree isolation
 
@@ -183,6 +187,8 @@ A step `cwd` narrows launch working context to an existing directory inside the 
 ```
 
 Packaged examples are references to copy and adapt; they are not loaded by package path and are not a runtime template API. Copy a trusted example into the workspace, replace placeholders, inspect authority, then call `start` with the copied filename.
+
+Operator checklist: First successful `graphFile` run should use a copied pure file such as `local-read-only-graph.json`. Do not put `action`, `runId`, nested `graphFile`, or other action wrapper fields inside that graph file.
 
 ## Messages and supervision
 

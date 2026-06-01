@@ -386,6 +386,38 @@ test("start returns a registered runId and run_status exposes final output", asy
 	assert.equal(harness.messages[0]?.message.includes("Objective:"), true);
 });
 
+test("start normalizes common agent-authored graph nesting and step model placement", async () => {
+	const root = await mkdir(join(tmpdir(), `pi-multiagent-normalized-${Date.now()}`), { recursive: true });
+	let spawnedArgs: string[] = [];
+	const harness = rpcHarness("auto", (args) => { spawnedArgs = args; });
+	const options = makeOptions(root, harness.spawn);
+	const started = await runAgentTeam({
+		action: "start",
+		graph: {
+			graph: {
+				objective: "normalized detached",
+				steps: [{ id: "one", agent: { system: "Return ok." }, task: "Return ok.", model: "provider/model", fallbackModels: ["provider/fallback"], thinking: "low" }],
+			},
+			authority: { allowFilesystemRead: true },
+			limits: { timeoutSecondsPerStep: 30 },
+		},
+		options: { terminalRetentionSeconds: 30 },
+	} as unknown as AgentTeamInput, options);
+	const runId = started.details.run?.runId ?? "";
+	assert.match(runId, /^r[1-9][0-9]{0,6}$/);
+	assert.equal(started.details.error, undefined);
+	assert.equal(started.details.diagnostics.some((item) => item.code === "start-graph-double-nested-normalized"), true);
+	assert.equal(started.details.diagnostics.some((item) => item.code === "step-agent-fields-normalized"), true);
+	assert.equal(started.details.diagnostics.some((item) => item.code === "input-schema-invalid"), false);
+	assert.equal(started.details.steps[0]?.model, "provider/model");
+	assert.equal(started.details.steps[0]?.thinking, "low");
+	assert.equal(spawnedArgs[spawnedArgs.indexOf("--model") + 1], "provider/model");
+	assert.equal(spawnedArgs[spawnedArgs.indexOf("--thinking") + 1], "low");
+	const terminal = await waitTerminal(root, runId, options);
+	assert.equal(terminal.details.run?.status, "succeeded");
+	await runAgentTeam({ action: "cleanup", runId }, options);
+});
+
 test("child tool_execution_end error is visible without forcing step failure", async () => {
 	const root = await mkdir(join(tmpdir(), `pi-multiagent-child-tool-error-${Date.now()}`), { recursive: true });
 	const harness = rpcHarness("hold");

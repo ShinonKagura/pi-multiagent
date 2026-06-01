@@ -60,8 +60,8 @@ const peerRoot = dirname(dirname(peerEntry));
 
 const MAPPINGS = new Map([["@earendil-works/pi-coding-agent", peerEntry]]);
 for (const [specifier, ...candidates] of [
-	["@earendil-works/pi-tui", "@earendil-works/pi-tui", join(peerRoot, "node_modules", "@earendil-works", "pi-tui", "dist", "index.js")],
-	["@earendil-works/pi-ai", "@earendil-works/pi-ai", join(peerRoot, "node_modules", "@earendil-works", "pi-ai", "dist", "index.js")],
+	["@earendil-works/pi-tui", join(forkRoot, "node_modules", "@earendil-works", "pi-tui", "dist", "index.js"), "@earendil-works/pi-tui", join(peerRoot, "node_modules", "@earendil-works", "pi-tui", "dist", "index.js")],
+	["@earendil-works/pi-ai", join(forkRoot, "node_modules", "@earendil-works", "pi-ai", "dist", "index.js"), "@earendil-works/pi-ai", join(peerRoot, "node_modules", "@earendil-works", "pi-ai", "dist", "index.js")],
 	["typebox", "typebox", join(peerRoot, "node_modules", "typebox", "build", "index.mjs")],
 	["typebox/compile", "typebox/compile", join(peerRoot, "node_modules", "typebox", "build", "compile", "index.mjs")],
 ]) {

@@ -19,7 +19,7 @@ assert.equal(typeof manifest === "object" && manifest !== null && "files" in man
 const rawFiles = manifest.files;
 assert.equal(Array.isArray(rawFiles), true, "npm pack files should be an array");
 const rawUnpackedSize = "unpackedSize" in manifest ? manifest.unpackedSize : undefined;
-assert.equal(typeof rawUnpackedSize === "number" && rawUnpackedSize < 750000, true, "packed artifact should stay below the package surface budget");
+assert.equal(typeof rawUnpackedSize === "number" && rawUnpackedSize < 900000, true, "packed artifact should stay below the package surface budget");
 
 const paths = new Set<string>();
 for (const rawFile of rawFiles) {

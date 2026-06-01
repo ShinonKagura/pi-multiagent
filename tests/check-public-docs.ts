@@ -200,7 +200,7 @@ function checkLimitsContract(): void {
 }
 
 function checkGraphExamples(): void {
-	for (const file of collectFiles("examples", ".json")) {
+	for (const file of collectFiles("examples/graphs", ".json")) {
 		const parsed: unknown = JSON.parse(readFileSync(join(packageRoot, file), "utf8"));
 		if (!isObject(parsed)) {
 			failures.push(`${file}: graph example must be a JSON object`);

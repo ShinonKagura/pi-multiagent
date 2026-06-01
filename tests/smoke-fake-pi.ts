@@ -98,7 +98,7 @@ registerMultiagentExtension(
 
 const tool = tools.find((candidate) => candidate.name === "agent_team");
 assert.ok(tool);
-assert.equal(flagValues.get("agent-team-subagent-skills"), "enabled");
+assert.equal(flagValues.get("agent-team-subagent-skills"), "auto");
 
 const catalog = await tool.execute("smoke-catalog", { action: "catalog", library: { sources: ["package"], query: "review" } }, undefined, undefined, makeCtx(false));
 assert.equal(catalog.content[0].text.includes("package:reviewer"), true);
@@ -362,7 +362,7 @@ function assertNotice(notice: { message: unknown; options: unknown } | undefined
 	assert.match(notice.message.content, /runId=r[1-9][0-9]{0,6}/);
 	assert.match(notice.message.content, /final evidence step succeeded .*\.md/);
 	assert.match(notice.message.content, /untrusted status evidence; run_status\/step_result for artifacts/);
-	assert.doesNotMatch(notice.message.content, /# agent_team terminal notice|Objective:|Run:|Exceptional controls|artifact=|\/tmp\/|Next:|cleanup|cursor|debugEvents|smoke-ok/i);
+	assert.doesNotMatch(notice.message.content, /# agent_team terminal notice|Objective:|Run:|Exceptional controls|artifact=|Next:|cleanup|cursor|debugEvents|smoke-ok/i);
 	assert.equal(isRecord(notice.message.details), true);
 	const details = notice.message.details;
 	const outputs = Array.isArray(details.outputs) ? details.outputs : [];

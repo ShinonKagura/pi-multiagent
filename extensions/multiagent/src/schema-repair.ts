@@ -4,6 +4,9 @@ const BUILTIN_CHILD_TOOL_SET = new Set<string>(BUILTIN_CHILD_TOOL_NAMES);
 
 export function schemaRepair(input: unknown, path: string): string {
 	if (isRecord(input)) {
+		if (hasDoubleNestedStartGraph(input) && (path === "/" || path.startsWith("/graph"))) return 'Do not nest the graph body under graph.graph. Use {"action":"start","graph":{"authority":{"allowFilesystemRead":true},"objective":"...","steps":[...]}}.';
+		const stepLevelAgentField = findStepLevelAgentField(input);
+		if (stepLevelAgentField && (path === "/" || path.startsWith("/graph/steps"))) return `Move ${stepLevelAgentField} into steps[].agent.${stepLevelAgentField}; model, fallbackModels, and thinking belong inside agent, not beside agent at step level.`;
 		const pathRepair = schemaRepairForPath(path);
 		if (pathRepair) return pathRepair;
 		const misplacedExtensionTool = findMisplacedExtensionToolName(input);
@@ -54,6 +57,23 @@ function findAgentSkillsField(input: Record<string, unknown>): boolean {
 	const graph = input.graph;
 	if (!isRecord(graph) || !Array.isArray(graph.steps)) return false;
 	return graph.steps.some((step) => isRecord(step) && isRecord(step.agent) && step.agent.skills !== undefined);
+}
+
+function hasDoubleNestedStartGraph(input: Record<string, unknown>): boolean {
+	const graph = input.graph;
+	if (!isRecord(graph) || !isRecord(graph.graph)) return false;
+	const innerGraph = graph.graph;
+	return innerGraph.objective !== undefined || innerGraph.steps !== undefined;
+}
+
+function findStepLevelAgentField(input: Record<string, unknown>): string | undefined {
+	const graph = input.graph;
+	if (!isRecord(graph) || !Array.isArray(graph.steps)) return undefined;
+	for (const step of graph.steps) {
+		if (!isRecord(step)) continue;
+		for (const field of ["model", "fallbackModels", "thinking"]) if (step[field] !== undefined) return field;
+	}
+	return undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

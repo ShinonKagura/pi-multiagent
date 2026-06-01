@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compatibility normalization and sharper repair copy for two common agent-authored `agent_team start` mistakes: double-nested `graph.graph` bodies and step-level `model` / `fallbackModels` / `thinking` fields that belong under `steps[].agent`. Unambiguous cases now launch with warning diagnostics instead of dead-ending before child start; conflicting values still fail closed.
+- Updated stale fake-Pi/package-load expectations to the current `--agent-team-subagent-skills auto` default and compact terminal-notice artifact-path contract, restored packaged gallery metadata, and raised the package-size guardrail for that gallery asset so `pnpm run gate` exercises the active behavior.
+
 ## 1.0.0 - 2026-05-30
 
 - First public release of **hb-orchestra** — detached multi-agent orchestration for Pi, built on the inherited `pi-multiagent` substrate with extended product scope across all six layers.

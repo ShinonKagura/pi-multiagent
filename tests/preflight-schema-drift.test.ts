@@ -4,6 +4,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { Compile } from "typebox/compile";
 import { validatePreflightShape } from "../extensions/multiagent/src/preflight-shape.ts";
+import { schemaRepair } from "../extensions/multiagent/src/schema-repair.ts";
 import { AgentTeamSchema } from "../extensions/multiagent/src/schemas.ts";
 
 const validate = Compile(AgentTeamSchema);
@@ -87,4 +88,32 @@ test("PRE: schema fully rejects unknown graph-body fields even when preflight is
 	// additionalProperties:false rejects unknown keys without a preflight legacy repair.
 	const wrapped = { action: "start", graph: invalid };
 	assert.equal(validate.Check(wrapped), false);
+});
+
+test("PRE: schema repair explains double-nested start graph", () => {
+	const invalid = {
+		action: "start",
+		graph: {
+			graph: {
+				objective: "o",
+				authority: { allowFilesystemRead: true },
+				steps: [{ id: "a", agent: { system: "s" }, task: "t" }],
+			},
+		},
+	};
+	assert.equal(validate.Check(invalid), false);
+	assert.match(schemaRepair(invalid, "/graph"), /Do not nest the graph body under graph\.graph/);
+});
+
+test("PRE: schema repair explains step-level model controls", () => {
+	const invalid = {
+		action: "start",
+		graph: {
+			objective: "o",
+			authority: { allowFilesystemRead: true },
+			steps: [{ id: "a", agent: { system: "s" }, task: "t", model: "provider/model", fallbackModels: ["fallback/model"], thinking: "low" }],
+		},
+	};
+	assert.equal(validate.Check(invalid), false);
+	assert.match(schemaRepair(invalid, "/graph/steps/0"), /inside agent, not beside agent at step level/);
 });
