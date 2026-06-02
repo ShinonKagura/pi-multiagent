@@ -306,6 +306,12 @@ Subagent skill propagation is a product configuration knob, not a graph field. U
 
 Skills never grant tools, graph authority, mutation permission, broader task scope, or permission to ignore the delegated task. Use `--agent-team-subagent-skills enabled` when missing caller skills should be treated as a hard planning failure; use `--agent-team-subagent-skills disabled` when no caller skills should cross into children.
 
+## Model lanes, fallback, and rate limits
+
+A step runs on the active parent model/thinking lane captured at `start`, unless agent metadata pins a lane or the step sets `agent.model`. `agent.model` and `agent.fallbackModels` take **real Pi model IDs in `provider/model` form** discovered with `pi --list-models`; choose a `provider` the session is authenticated for. The same model id can exist under more than one provider (a keyed lane and an OAuth lane), so the provider prefix selects the auth route. An invented or unauthenticated id makes the child fail to resolve its model, not fall back silently.
+
+Provider `rate_limit_error`, `overloaded`, `429`, `503`, or `529` notices are **provider throttling, not a package failure**; the child step fails and the notice (often surfaced as `diagnostic:stderr needs attention` plus a `terminal:failed`) reports it truthfully. Handle it by load, not by retrying blindly: lower `limits.concurrency` so fewer children hit one account at once, and set `fallbackModels` on a **different auth lane** than the throttled one so a rate-limited primary retries on the next model before failing (throttle/overload errors are classified retryable). Detached runs have no per-step retry; re-run the graph for a transient spike.
+
 ## Graph files
 
 Use `graphFile` only with `start` and only for a pure graph JSON file copied into the current workspace:
