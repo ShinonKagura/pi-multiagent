@@ -66,10 +66,18 @@ The first real-Pi (`pi --print`, v0.77.0) smoke from the Stellar workspace found
   The `--agent-team-subagent-skills` flag does not help because orchestra's separate `ExtensionAPI`
   cannot read a flag registered by the multiagent extension. Fixed by hard-defaulting the compat
   surface to `disabled` (pi-subagents semantics: children do not inherit caller skills). **Known
-  limitation:** the operator `--agent-team-subagent-skills` flag does NOT affect `/agent` yet — only
-  `disabled` short-circuits the cap, while `auto`/`enabled` both hard-error over the cap in the
-  `resolveDetachedGraph` path (no auto soft-fallback there). Honoring the operator flag needs orchestra
+  limitation:** the operator `--agent-team-subagent-skills` flag does NOT affect `/agent` yet —
+  `disabled` short-circuits the cap on the orchestra path. Honoring the operator flag needs orchestra
   to register the flag itself (tracked follow-up), so it is intentionally deferred for v0.5-minimal.
+- **FIX-3 — `auto` now soft-caps on the `agent_team`/`resolveDetachedGraph` path (2026-06-02).** The
+  multiagent `agent_team` tool defaults to flag `auto`, and `auto` advertised "overflow falls back to
+  no caller skills with a warning", but `caller-skills.ts` only special-cased `disabled`, so `auto`
+  (and `enabled`) hard-errored with `subagent-skills-too-many` over the 128 cap — a direct 7-step graph
+  in a 129-skill session never started. `resolveVisibleCallerSkills` now honors `mode`: on overflow with
+  `auto` it emits a non-fatal `subagent-skills-overflow-dropped` warning and returns `[]` (child launches
+  with no caller skills); `enabled` still hard-fails; `disabled` still short-circuits. So in a normal
+  skill-rich session `agent_team` starts with **no flag and no skill trimming**. Verified: `tsc` clean,
+  full suite **388/388** incl. a new `planning.test.ts` overflow regression. (commit `410a136`)
 - **OPEN-1 — `agent_team run_status` now finds orchestra-started runs.** `detached-registry.ts`
   held a module-local `Map`; loading orchestra + multiagent as two `-e` extensions created two
   module instances → split-brain registry (orchestra registered runs that `run_status` /
