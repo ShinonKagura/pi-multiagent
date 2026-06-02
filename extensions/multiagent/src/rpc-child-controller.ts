@@ -13,7 +13,15 @@ import { terminateRpcChild } from "./rpc-child-termination.ts";
 import { firstNonBlank, toolErrorPreview } from "./rpc-tool-events.ts";
 import type { RpcChildControllerOptions, RpcStepResult } from "./rpc-child-types.ts";
 
-const ACK_TIMEOUT_MS = 10_000;
+// Window for a child to ACCEPT the `prompt` command (controller.run sends it immediately after
+// spawn, with no readiness handshake), so this must cover the child's ENTIRE pi startup: process
+// bootstrap + extension load + model-client/provider init, before it can read stdin and ack. 10s was
+// far too tight for a heavyweight pi child under concurrent spawn load (model init + cold caches),
+// causing uniform `RPC command prompt timed out waiting for response` failures with chars=0 even
+// though the children were healthy. The ack resolves the instant the child accepts, so a generous
+// ceiling is essentially free on the happy path; truly-stuck children still fail via exit/close/stderr
+// and the per-step timeoutSecondsPerStep. This is the prompt-accept window, NOT a per-turn limit.
+export const ACK_TIMEOUT_MS = 120_000;
 const EXIT_CLOSE_GRACE_MS = 500;
 
 export class RpcChildController {
