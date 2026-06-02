@@ -514,6 +514,12 @@ export function modelCandidates(agent: { model: string | undefined; fallbackMode
 export function isRetryableModelError(message: string | undefined): boolean {
 	if (!message) return false;
 	const text = message.toLowerCase();
+	// Strong provider-side throttle/availability signals are retryable on their own, even when the
+	// provider error payload never says "model"/"provider"/"deployment" — e.g. Anthropic's
+	// {"type":"rate_limit_error","message":"Rate limited"} or a 429/503/529 overloaded_error.
+	if (/(rate.?limit|too many requests|overloaded|\b429\b|\b503\b|\b529\b|quota)/.test(text)) return true;
+	// Weaker, ambiguous signals require explicit model/provider/deployment context so unrelated task
+	// failures that merely contain a word like "invalid" or "not found" are not retried.
 	if (!/\b(model|provider|deployment)\b/.test(text)) return false;
 	return /(not found|be found|not exist|cannot find|could not find|unknown|unavailable|unsupported|no access|not available|invalid|deprecated|decommission|unauthor|forbidden|permission|rate.?limit|quota|overloaded|capacity|too many requests|\b503\b|\b429\b)/.test(text);
 }

@@ -27,6 +27,10 @@ test("isRetryableModelError: matches model/provider availability failures", () =
 	assert.equal(isRetryableModelError("provider returned 429 rate limit"), true);
 	assert.equal(isRetryableModelError("model provider unauthorized"), true);
 	assert.equal(isRetryableModelError("deployment overloaded"), true);
+	// Real provider payloads that never say model/provider/deployment must still retry on the next lane.
+	assert.equal(isRetryableModelError('Subagent RPC ended with stopReason error: {"type":"error","error":{"type":"rate_limit_error","message":"Rate limited"},"request_id":"req_x"}'), true);
+	assert.equal(isRetryableModelError("overloaded_error: Overloaded"), true);
+	assert.equal(isRetryableModelError("HTTP 429 Too Many Requests"), true);
 });
 
 test("isRetryableModelError: does not match non-model failures", () => {
