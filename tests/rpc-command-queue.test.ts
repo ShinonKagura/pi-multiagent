@@ -75,6 +75,18 @@ test("RpcCommandQueue accepts responses before a backpressured write drains", as
 	assert.equal(queue.pendingCount, 0);
 });
 
+test("RpcCommandQueue honors a per-command timeout override (short override fires before long default)", async () => {
+	const queue = new RpcCommandQueue(5_000); // long default; the live-command override must win
+	const stdin = new PassThrough();
+	stdin.resume();
+	const started = Date.now();
+	const ack = await queue.send(stdin, { type: "steer", message: "x" }, 30);
+	const elapsed = Date.now() - started;
+	assert.equal(ack.success, false);
+	assert.match(ack.error ?? "", /RPC command steer timed out waiting for response/);
+	assert.ok(elapsed < 1_000, `per-command override (30ms) must fire well before the 5s default; elapsed=${elapsed}ms`);
+});
+
 class ControlledCommandWriter extends PassThrough {
 	line = "";
 	private readonly flushed: boolean;

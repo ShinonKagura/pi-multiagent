@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { after, before, test } from "node:test";
 import { PassThrough, Writable } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { ACK_TIMEOUT_MS, RpcChildController } from "../extensions/multiagent/src/rpc-child-controller.ts";
+import { LIVE_COMMAND_ACK_TIMEOUT_MS, PROMPT_ACK_TIMEOUT_MS, RpcChildController } from "../extensions/multiagent/src/rpc-child-controller.ts";
 import type { SpawnOptions } from "../extensions/multiagent/src/child-launch.ts";
 import type { RpcJsonRecord } from "../extensions/multiagent/src/rpc-jsonl.ts";
 import type { RpcChildControllerOptions } from "../extensions/multiagent/src/rpc-child-types.ts";
@@ -20,12 +20,15 @@ after(() => {
 	else process.env.PI_MULTIAGENT_PI_LAUNCHER = originalLauncher;
 });
 
-test("prompt-accept ack window is generous enough for heavyweight child startup under load", () => {
-	// run() sends `prompt` immediately after spawn with no readiness handshake, so this window must
-	// cover full pi child startup (bootstrap + extension load + model-client init). A too-tight value
-	// (the old 10s) caused uniform `RPC command prompt timed out waiting for response` failures with
-	// chars=0 across healthy children under concurrent spawn load. Guard against re-tightening it.
-	assert.ok(ACK_TIMEOUT_MS >= 60_000, `ACK_TIMEOUT_MS must be >= 60s for child startup under load; got ${ACK_TIMEOUT_MS}`);
+test("ack windows: generous prompt window for child startup, short live-command window for responsiveness", () => {
+	// run() sends `prompt` immediately after spawn with no readiness handshake, so the prompt window
+	// must cover full pi child startup (bootstrap + extension load + model-client init). The old shared
+	// 10s caused uniform `RPC command prompt timed out waiting for response` failures (chars=0) on
+	// healthy children under load. But steer/follow_up/abort go to an already-live child and the parent
+	// awaits the ack, so those must stay short or a hung child blocks the parent for the whole window.
+	assert.ok(PROMPT_ACK_TIMEOUT_MS >= 60_000, `PROMPT_ACK_TIMEOUT_MS must be >= 60s for child startup under load; got ${PROMPT_ACK_TIMEOUT_MS}`);
+	assert.ok(LIVE_COMMAND_ACK_TIMEOUT_MS <= 30_000, `LIVE_COMMAND_ACK_TIMEOUT_MS must be <= 30s for parent responsiveness; got ${LIVE_COMMAND_ACK_TIMEOUT_MS}`);
+	assert.ok(LIVE_COMMAND_ACK_TIMEOUT_MS < PROMPT_ACK_TIMEOUT_MS, "live-command window must be shorter than the prompt window");
 });
 
 class FakeRpcChild extends EventEmitter {

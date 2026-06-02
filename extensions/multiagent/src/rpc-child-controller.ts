@@ -13,20 +13,24 @@ import { terminateRpcChild } from "./rpc-child-termination.ts";
 import { firstNonBlank, toolErrorPreview } from "./rpc-tool-events.ts";
 import type { RpcChildControllerOptions, RpcStepResult } from "./rpc-child-types.ts";
 
-// Window for a child to ACCEPT the `prompt` command (controller.run sends it immediately after
-// spawn, with no readiness handshake), so this must cover the child's ENTIRE pi startup: process
-// bootstrap + extension load + model-client/provider init, before it can read stdin and ack. 10s was
-// far too tight for a heavyweight pi child under concurrent spawn load (model init + cold caches),
-// causing uniform `RPC command prompt timed out waiting for response` failures with chars=0 even
-// though the children were healthy. The ack resolves the instant the child accepts, so a generous
-// ceiling is essentially free on the happy path; truly-stuck children still fail via exit/close/stderr
-// and the per-step timeoutSecondsPerStep. This is the prompt-accept window, NOT a per-turn limit.
-export const ACK_TIMEOUT_MS = 120_000;
+// PROMPT_ACK_TIMEOUT_MS: window for a child to ACCEPT the initial `prompt` command. controller.run
+// sends it immediately after spawn with no readiness handshake, so it must cover the child's ENTIRE
+// pi startup (bootstrap + extension discovery/load + startup sweep + model-client init) before it can
+// read stdin and ack. 10s was far too tight for a heavyweight child under concurrent spawn/CPU load,
+// causing uniform `RPC command prompt timed out waiting for response` failures (chars=0) on healthy
+// children. The ack resolves the instant the child accepts, so a generous ceiling is free on the happy
+// path; truly-stuck children still fail via exit/close/stderr and the per-step timeoutSecondsPerStep.
+export const PROMPT_ACK_TIMEOUT_MS = 120_000;
+// LIVE_COMMAND_ACK_TIMEOUT_MS: window for steer/follow_up/abort sent to an ALREADY-LIVE child. Kept
+// short so the parent (which awaits the ack in message()/cancel()) is not blocked for the full prompt
+// window on a hung child. Differentiated from the prompt window per design review.
+export const LIVE_COMMAND_ACK_TIMEOUT_MS = 30_000;
 const EXIT_CLOSE_GRACE_MS = 500;
 
 export class RpcChildController {
 	private readonly options: RpcChildControllerOptions;
 	private readonly commands: RpcCommandQueue;
+	private readonly promptAckTimeoutMs: number;
 	private child: ChildProcessWithoutNullStreams | undefined;
 	private completionResolve: ((result: RpcStepResult) => void) | undefined;
 	private closingResult: RpcStepResult | undefined;
@@ -56,8 +60,13 @@ export class RpcChildController {
 		this.options = options;
 		this.spawnProcess = options.spawnProcess ?? spawn;
 		this.outputBudget = new AssistantOutputBudget({ maxBytes: options.outputLimit?.maxBytes, maxAssistantFinals: options.outputLimit?.maxAssistantFinals });
-		const ackTimeoutMs = Number.isFinite(options.ackTimeoutMs) && options.ackTimeoutMs !== undefined && options.ackTimeoutMs > 0 ? Math.trunc(options.ackTimeoutMs) : ACK_TIMEOUT_MS;
-		this.commands = new RpcCommandQueue(ackTimeoutMs);
+		// Operator override (rpcCommandAckTimeoutMs) tunes the startup-sensitive prompt window; live
+		// commands always use the short LIVE_COMMAND_ACK_TIMEOUT_MS so the parent stays responsive.
+		const overrideMs = Number.isFinite(options.ackTimeoutMs) && options.ackTimeoutMs !== undefined && options.ackTimeoutMs > 0 ? Math.trunc(options.ackTimeoutMs) : undefined;
+		// When an explicit override is given (operator flag or tests) it applies to BOTH windows, preserving
+		// the original single-knob semantics; otherwise prompt and live commands use their differentiated defaults.
+		this.promptAckTimeoutMs = overrideMs ?? PROMPT_ACK_TIMEOUT_MS;
+		this.commands = new RpcCommandQueue(overrideMs ?? LIVE_COMMAND_ACK_TIMEOUT_MS);
 	}
 
 	async run(task: string): Promise<RpcStepResult> {
@@ -78,7 +87,7 @@ export class RpcChildController {
 			this.completionResolve = resolve;
 		});
 		this.options.onEvent({ type: "rpc", label: "prompt", preview: "sent", status: "running" });
-		const ack = await this.sendCommand({ type: "prompt", message: task });
+		const ack = await this.sendCommand({ type: "prompt", message: task }, this.promptAckTimeoutMs);
 		if (!ack.success) this.fail("failed", ack.error ?? "Prompt rejected.");
 		else this.options.onEvent({ type: "rpc", label: "prompt", preview: "accepted", status: "done" });
 		return completion;
@@ -135,9 +144,9 @@ export class RpcChildController {
 		this.fail("failed", message, "stderr-error");
 	}
 
-	private sendCommand(command: RpcJsonRecord): Promise<RpcCommandAck> {
+	private sendCommand(command: RpcJsonRecord, timeoutMs?: number): Promise<RpcCommandAck> {
 		if (this.finalized || this.closingResult) return Promise.resolve({ success: false, error: "RPC child is not live." });
-		return this.commands.send(this.child?.stdin, command);
+		return this.commands.send(this.child?.stdin, command, timeoutMs);
 	}
 
 	private handleRecord(record: RpcJsonRecord): void {

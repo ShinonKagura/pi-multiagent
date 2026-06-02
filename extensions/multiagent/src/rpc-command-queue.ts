@@ -32,18 +32,21 @@ export class RpcCommandQueue {
 		return this.pending.size;
 	}
 
-	send(stdin: RpcCommandWriter | undefined, command: RpcJsonRecord): Promise<RpcCommandAck> {
+	send(stdin: RpcCommandWriter | undefined, command: RpcJsonRecord, timeoutMs?: number): Promise<RpcCommandAck> {
 		if (!stdin) return Promise.resolve({ success: false, error: "RPC child is not live." });
 		const id = `cmd-${++this.nextCommandId}`;
 		const commandName = typeof command.type === "string" ? command.type : "unknown";
 		const payload = { id, ...command };
+		// Per-command override lets the initial `prompt` use a long child-startup window while live
+		// commands (steer/follow_up/abort) keep a short window so the parent is not blocked on a hung child.
+		const effectiveTimeoutMs = typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : this.timeoutMs;
 		const ack = new Promise<RpcCommandAck>((resolve) => {
 			this.pending.set(id, { command: commandName, resolve, timer: undefined, cleanup: undefined });
 		});
 		try {
 			const flushed = stdin.write(serializeRpcJsonLine(payload));
-			if (flushed) this.startAckTimer(id, commandName);
-			else this.waitForDrain(stdin, id, commandName);
+			if (flushed) this.startAckTimer(id, commandName, effectiveTimeoutMs);
+			else this.waitForDrain(stdin, id, commandName, effectiveTimeoutMs);
 		} catch (error) {
 			this.resolvePending(id, { success: false, error: `RPC stdin write failed: ${error instanceof Error ? error.message : String(error)}` });
 		}
@@ -69,7 +72,7 @@ export class RpcCommandQueue {
 		for (const [id, pending] of this.pending.entries()) this.resolvePending(id, { success: false, error: errorForCommand(pending.command) });
 	}
 
-	private waitForDrain(stdin: RpcCommandWriter, id: string, commandName: string): void {
+	private waitForDrain(stdin: RpcCommandWriter, id: string, commandName: string, timeoutMs: number): void {
 		const onDrain = () => {
 			const pending = this.pending.get(id);
 			if (!pending) return;
@@ -77,7 +80,7 @@ export class RpcCommandQueue {
 			pending.timer = undefined;
 			pending.cleanup?.();
 			pending.cleanup = undefined;
-			this.startAckTimer(id, commandName);
+			this.startAckTimer(id, commandName, timeoutMs);
 		};
 		const onError = (error: Error) => {
 			this.resolvePending(id, { success: false, error: `RPC stdin write failed before drain: ${error.message}` });
@@ -90,18 +93,18 @@ export class RpcCommandQueue {
 		};
 		pending.timer = setTimeout(() => {
 			this.resolvePending(id, { success: false, error: `RPC stdin write did not drain before timeout for command ${commandName}.` });
-		}, this.timeoutMs);
+		}, timeoutMs);
 		pending.timer.unref?.();
 		stdin.once("drain", onDrain);
 		stdin.once("error", onError);
 	}
 
-	private startAckTimer(id: string, commandName: string): void {
+	private startAckTimer(id: string, commandName: string, timeoutMs: number): void {
 		const pending = this.pending.get(id);
 		if (!pending || pending.timer) return;
 		pending.timer = setTimeout(() => {
 			this.resolvePending(id, { success: false, error: `RPC command ${commandName} timed out waiting for response.` });
-		}, this.timeoutMs);
+		}, timeoutMs);
 		pending.timer.unref?.();
 	}
 
