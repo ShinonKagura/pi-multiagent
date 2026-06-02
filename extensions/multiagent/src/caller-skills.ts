@@ -92,6 +92,7 @@ export function verifyResolvedCallerSkillSources(skills: ResolvedCallerSkill[]):
 }
 
 function resolveVisibleCallerSkills(input: {
+	mode: SubagentSkillMode;
 	label: string;
 	path: string;
 	diagnostics: AgentDiagnostic[];
@@ -110,6 +111,12 @@ function resolveVisibleCallerSkills(input: {
 		resolved.push({ name: skill.name, description: skill.description, source: source.source });
 	}
 	if (resolved.length > MAX_CALLER_SKILLS) {
+		// auto mode is a soft cap: on overflow, launch the subagent with no caller skills and warn,
+		// instead of hard-failing the whole run. Matches the --agent-team-subagent-skills flag contract.
+		if (input.mode === "auto") {
+			input.diagnostics.push({ code: "subagent-skills-overflow-dropped", message: `${input.label} would receive ${resolved.length} caller Pi skills; maximum is ${MAX_CALLER_SKILLS}. auto mode launched the subagent with no caller skills.`, path: input.path, severity: "warning" });
+			return [];
+		}
 		input.diagnostics.push({ code: "subagent-skills-too-many", message: `${input.label} would receive ${resolved.length} caller Pi skills; maximum is ${MAX_CALLER_SKILLS}. Disable subagent skill propagation or reduce the caller-visible skill set.`, path: input.path, severity: "error" });
 		return undefined;
 	}

@@ -7,7 +7,7 @@ import type { AgentConfig, ParentSkillInventory, ParentToolInfo, ParentToolInven
 import { resolveDetachedGraph, validatePreflightShape } from "../extensions/multiagent/src/planning.ts";
 import { findProjectSettingsFile } from "../extensions/multiagent/src/project-settings.ts";
 import { readSubagentSkillConfig } from "../extensions/multiagent/src/subagent-skills-config.ts";
-import { BUILTIN_CHILD_TOOL_NAMES, READONLY_CHILD_TOOL_NAMES } from "../extensions/multiagent/src/types.ts";
+import { BUILTIN_CHILD_TOOL_NAMES, MAX_CALLER_SKILLS, READONLY_CHILD_TOOL_NAMES } from "../extensions/multiagent/src/types.ts";
 
 const parentTools: ParentToolInventory = { apiAvailable: true, errorMessage: undefined, tools: activeBuiltinTools() };
 const parentSkills: ParentSkillInventory = { apiAvailable: true, readActive: true, errorMessage: undefined, skills: [] };
@@ -454,6 +454,30 @@ test("resolveDetachedGraph propagates all caller skills by default and none when
 	const readInactive = resolveDetachedGraph(graph, [], [], { cwd, invocationCwd: cwd, parentTools, parentSkills: { apiAvailable: true, readActive: false, errorMessage: undefined, skills: [] } }, undefined);
 	assert.equal(readInactive.diagnostics.some((item) => item.code === "subagent-skills-parent-read-inactive"), true);
 	assert.deepEqual(readInactive.steps, []);
+});
+
+test("resolveDetachedGraph auto mode soft-caps over-limit caller skills to none with a warning, while enabled hard-fails", async () => {
+	const parent = await mkdir(join(tmpdir(), `pi-multiagent-plan-skills-overflow-${Date.now()}`), { recursive: true });
+	const cwd = await mkdir(join(parent, "workspace"), { recursive: true });
+	const overflow = MAX_CALLER_SKILLS + 1;
+	const skills: ParentSkillInventory["skills"] = [];
+	for (let index = 0; index < overflow; index += 1) {
+		const name = `overflow-skill-${index}`;
+		const skillPath = join(parent, `${name}.md`);
+		await writeFile(skillPath, `# ${name}\n`);
+		skills.push({ name, description: name, sourceInfo: { path: skillPath, source: `user:${name}`, scope: "user", origin: "top-level", baseDir: parent } });
+	}
+	const overflowSkills: ParentSkillInventory = { apiAvailable: true, readActive: true, errorMessage: undefined, skills };
+	const graph = { objective: "skills overflow", authority: { allowFilesystemRead: true }, steps: [{ id: "one", agent: { system: "x", tools: ["read"] }, task: "x" }] };
+
+	const auto = resolveDetachedGraph(graph, [], [], { cwd, invocationCwd: cwd, parentTools, parentSkills: overflowSkills, subagentSkillMode: "auto" }, undefined);
+	assert.equal(auto.diagnostics.some((item) => item.severity === "error"), false);
+	assert.equal(auto.diagnostics.some((item) => item.code === "subagent-skills-overflow-dropped" && item.severity === "warning"), true);
+	assert.deepEqual(auto.steps[0]?.agent.callerSkills, []);
+
+	const enabled = resolveDetachedGraph(graph, [], [], { cwd, invocationCwd: cwd, parentTools, parentSkills: overflowSkills, subagentSkillMode: "enabled" }, undefined);
+	assert.equal(enabled.diagnostics.some((item) => item.code === "subagent-skills-too-many" && item.severity === "error"), true);
+	assert.deepEqual(enabled.steps, []);
 });
 
 test("resolveDetachedGraph fails all-or-nothing when any enabled caller skill source is unavailable", async () => {
